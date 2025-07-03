@@ -99,5 +99,5 @@ Neff = 1000/(1+(999*0.2)) = 1000 / 200.8 = 4.98
 
 So:
 <div align="center">
-SEadjusted = √((0.4 * 0.6) / 4.98) = 0.219 &nbsp;&nbsp;&nbsp;&nbsp vs.   SE = √((0.4 * 0.6) / 1000) = 0.015
+SEadjusted = √((0.4 * 0.6) / 4.98) = 0.219 &nbsp;&nbsp;&nbsp;&nbsp vs. &nbsp;&nbsp;&nbsp;&nbsp SE = √((0.4 * 0.6) / 1000) = 0.015
 </div>
