@@ -94,11 +94,10 @@ SEadjusted = √p(1-p)/Neff =  √p(1-p)/N *   √1 + (N - 1)ρ
 
 Then:
 <div align="center">
-SEadjusted = √p(1-p)/Neff =  √p(1-p)/N *   √1 + (N - 1)ρ
+Neff = 1000/(1+(999*0.2)) = 1000 / 200.8 = 4.98
 </div>
 
 So:
 <div align="center">
-SEadjusted = √p(1-p)/Neff =  √p(1-p)/N *   √1 + (N - 1)ρ
+SEadjusted = √((0.4 * 0.6) / 4.98) = 0.219   vs.   SE = √((0.4 * 0.6) / 1000) = 0.015
 </div>
-
