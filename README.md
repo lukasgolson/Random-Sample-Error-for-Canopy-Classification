@@ -53,7 +53,7 @@ Standard Error (SE) as calculated by i-Tree Canopy assumes independence among th
 The SE formula
 
 <div align="center">
-SE = √ (pq/N)  
+SE = √ (p * (1 - p) / N)
 </div>
 
 <br> is derived from the binomial distribution, which models the number of successes (e.g., tree cover) in a fixed number of independent Bernoulli trials. The key assumptions are:
