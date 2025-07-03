@@ -8,7 +8,19 @@ from tqdm import tqdm
 import multiprocessing
 import os
 from canopy_model import generate_canopy_map
-from canopy_sampling import calculate_direct_cover, get_single_estimate
+
+
+# --- Helper Function ---
+def get_single_estimate(canopy_map, num_samples):
+    """Performs a random sample run and returns the single estimated cover."""
+    # Handle edge case where a map has 0% cover to avoid divide-by-zero if num_samples is 0
+    if num_samples == 0:
+        return 0
+    height, width = canopy_map.shape
+    sample_x = np.random.randint(0, width, num_samples)
+    sample_y = np.random.randint(0, height, num_samples)
+    canopy_hits = np.sum(canopy_map[sample_y, sample_x])
+    return (canopy_hits / num_samples) * 100
 
 
 # --- Main Analysis Function ---
@@ -24,11 +36,11 @@ def analyze_sample_size_agreement(config, target_canopy_cover):
     canopy_map = generate_canopy_map(
         width=200, height=200, clustering=65, canopy_cover=target_canopy_cover, seed=42
     )
-    true_cover = calculate_direct_cover(canopy_map)
+    true_cover = np.mean(canopy_map) * 100
 
     agreement_results = []
 
-    with multiprocessing.Pool(processes=os.cpu_count()) as pool:
+    with multiprocessing.Pool(processes=4) as pool:
         for n_samples in sample_sizes:
             task_args = [(canopy_map, n_samples)] * num_trials
             estimates = pool.starmap(get_single_estimate, task_args)

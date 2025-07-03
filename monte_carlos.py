@@ -61,15 +61,15 @@ def run_monte_carlo(config):
 
 if __name__ == "__main__":
     CONFIG = {
-        "MAP_WIDTH": 100,
-        "MAP_HEIGHT": 100,
-        "NUM_SAMPLES_PER_SET": 100,
+        "MAP_WIDTH": 200,
+        "MAP_HEIGHT": 200,
+        "NUM_SAMPLES_PER_SET": 500,
         "NUM_MAPS": 2000,
         "NUM_SAMPLE_SETS_PER_MAP": 100,
-        "CLUSTERING": 50,
+        "CLUSTERING": -1,  # Placeholder for clustering level
     }
 
-    clustering_levels_to_test = np.arange(0, 101, 10)
+    clustering_levels_to_test = np.arange(0, 101, 5) # We are getting an artifact at clustering = 0
     all_results = []
 
     # --- 1. Run all simulations first to gather data ---
