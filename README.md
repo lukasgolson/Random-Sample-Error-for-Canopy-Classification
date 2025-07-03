@@ -64,4 +64,8 @@ SE = √ (pq/N)
 
 If the points are spatially autocorrelated (common in land cover data), the SE will be **underestimated**, leading to **overconfidence** in the precision of your estimate.
 
-In such cases, more robust approaches (e.g., bootstrapping or using spatially explicit models) may be needed to better estimate uncertainty.
+One approach is to calculate an adjusted standard error as
+
+<div align="center">
+SE = √ (pq/N)  
+</div>
