@@ -1,48 +1,22 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from canopy_model import generate_canopy_map
-
-
-def calculate_direct_cover(canopy_map):
-
-    # The mean of a binary (0/1) array is the proportion of 1s.
-    true_proportion = np.mean(canopy_map)
-    return true_proportion * 100
-
-
-def simulate_random_sampling(canopy_map, num_samples):
-    height, width = canopy_map.shape
-
-    # Generate random coordinates for each sample point
-    sample_x = np.random.randint(0, width, num_samples)
-    sample_y = np.random.randint(0, height, num_samples)
-
-    # Check for canopy presence at each sample point and sum the "hits"
-    canopy_hits = np.sum(canopy_map[sample_y, sample_x])
-
-    # Calculate the estimated proportion of cover
-    estimated_proportion = canopy_hits / num_samples
-
-    return estimated_proportion * 100, sample_x, sample_y
-
+from canopy_sampling import calculate_direct_cover, simulate_random_sampling
 
 # --- Main Simulation and Visualization ---
 
-# 1. Generate a base map to analyze
-canopy_map = generate_canopy_map(clustering=70, canopy_cover=0.55, seed=101)
+# Generate a base map to analyze
+canopy_map = generate_canopy_map(width=1024, height=1024, clustering=70, canopy_cover=0.55, seed=101)
 
-# 2. Set the number of samples for our simulation
 num_samples = 200
 
-# 3. Perform the calculations
+# Calculate the true canopy cover using direct calculation and simulate random sampling
 true_cover = calculate_direct_cover(canopy_map)
 estimated_cover, sample_x, sample_y = simulate_random_sampling(canopy_map, num_samples)
 
-# 4. Visualize the results
+# Visualize the results
 fig, ax = plt.subplots(figsize=(8, 8))
 ax.imshow(canopy_map, cmap='Greens', interpolation='nearest')
-
-# Overlay the random sample points
 ax.scatter(sample_x, sample_y, c='red', marker='+', s=50, label=f'{num_samples} Sample Points')
 
 ax.legend()
