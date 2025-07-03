@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from canopy_model import generate_canopy_map
 
 
-canopy_fraction = 0.1  # Fraction of the area that should be covered by canopies
+canopy_fraction = 0.5  # Fraction of the area that should be covered by canopies
 model_seed = None
 
 low_cluster_map = generate_canopy_map(clustering=5, canopy_cover=canopy_fraction, seed=model_seed)
