@@ -67,5 +67,11 @@ If the points are spatially autocorrelated (common in land cover data), the SE w
 One approach is to calculate an adjusted standard error as
 
 <div align="center">
-SE = √ (pq/N)  
+SEadjusted = √ (p(1 - p)/Neff) = √(p(1-p)/N) x √ DEFF   
+</div>
+
+<br>where
+
+<div align="center">
+DEFF = 1 + (nc - 1) * ρ 
 </div>
