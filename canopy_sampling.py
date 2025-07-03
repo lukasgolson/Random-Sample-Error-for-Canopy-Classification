@@ -8,7 +8,7 @@ def calculate_direct_cover(canopy_map):
     return true_proportion * 100
 
 
-def simulate_random_sampling(canopy_map, num_samples):
+def simulate_random_sampling(canopy_map, num_samples, with_coordinates=False):
     height, width = canopy_map.shape
 
     # Generate random coordinates for each sample point
@@ -21,7 +21,10 @@ def simulate_random_sampling(canopy_map, num_samples):
     # Calculate the estimated proportion of cover
     estimated_proportion = canopy_hits / num_samples
 
-    return estimated_proportion * 100, sample_x, sample_y
+    if with_coordinates:
+        return estimated_proportion * 100, sample_x, sample_y
+    else:
+        return estimated_proportion * 100
 
 
 def get_single_estimate(canopy_map, num_samples):

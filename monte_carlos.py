@@ -9,7 +9,7 @@ from canopy_model import generate_canopy_map
 import multiprocessing
 from tqdm import tqdm
 
-from sampling_analysis import calculate_direct_cover, simulate_random_sampling
+from canopy_sampling import calculate_direct_cover, simulate_random_sampling
 
 
 def calculate_itree_stats(n_hits, n_total):
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         "MAP_WIDTH": 100,
         "MAP_HEIGHT": 100,
         "NUM_SAMPLES_PER_SET": 100,
-        "NUM_MAPS": 500,
+        "NUM_MAPS": 200,
         "NUM_SAMPLE_SETS_PER_MAP": 100,
         "CLUSTERING": 50,
     }
