@@ -45,7 +45,7 @@ SE = (√n) / N
 
 <br>For example, if n = 5 and N = 1000, p = n/N (i.e., 5/1,000 = 0.005) and SE = √5 / 1000 = 0.0022. Thus the tree cover estimate would be 0.5% with a SE of 0.22%.
 
-# The Impact of Spatial Auto-Correlation
+# The Impact of Spatial Autocorrelation
 Standard Error (SE) as calculated by i-Tree Canopy assumes independence among the underlying observations.
 
 The SE formula
