@@ -14,14 +14,17 @@ n = total number of points classified as tree (i.e., 330), and
 p = n/N (i.e., 330/1,000 = 0.33)  
 q = 1 – p (i.e., 1 ‐ 0.33 = 0.67)
 
+And using the formula
 <div align="center">
 SE = √ (pq/N)  
-<br>SE = √ (0.33 x 0.67 / 1,000) = 0.0149
 </div>
 
 <br>Thus in this example, tree cover in the city is estimated at 33% with a SE of 1.5%. Based on the SE formula, SE is greatest when p=0.5 and least when p is very small or very large (Table 1).
+<div align="center">
+SE = √ (0.33 x 0.67 / 1,000) = 0.0149
+</div>
 
-**Table 1. Estimate of SE**  
+<br>**Table 1. Estimate of SE**  
 (N = 1000) with varying p.  
 p | SE  
 0.01 | 0.0031  
