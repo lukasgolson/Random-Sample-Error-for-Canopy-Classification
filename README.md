@@ -15,7 +15,8 @@ p = n/N (i.e., 330/1,000 = 0.33)
 q = 1 – p (i.e., 1 ‐ 0.33 = 0.67)
 
 <div align="center">
-SE = √ (pq/N) (i.e., √ (0.33 x 0.67 / 1,000) = 0.0149)  
+SE = √ (pq/N)  
+SE = √ (0.33 x 0.67 / 1,000) = 0.0149
 </div>
 
 <br>Thus in this example, tree cover in the city is estimated at 33% with a SE of 1.5%. Based on the SE formula, SE is greatest when p=0.5 and least when p is very small or very large (Table 1).
@@ -50,7 +51,7 @@ Standard Error (SE) as calculated by i-Tree Canopy assumes independence among th
 The SE formula
 
 <div align="center">
-SE = √ (pq/N) (i.e., √ (0.33 x 0.67 / 1,000) = 0.0149)  
+SE = √ (pq/N)  
 </div>
 
 <br> is derived from the binomial distribution, which models the number of successes (e.g., tree cover) in a fixed number of independent Bernoulli trials. The key assumptions are:
