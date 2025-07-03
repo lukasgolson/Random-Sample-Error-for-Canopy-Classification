@@ -66,13 +66,13 @@ If the points are spatially autocorrelated (common in land cover data), the SE w
 One approach is to calculate an adjusted standard error as
 
 <div align="center">
-SEadjusted = √ (p(1 - p)/Neff) = √(p(1-p)/N) x √ DEFF   
+SEadjusted = √ (p(1 - p)/Neff) = √(p(1-p)/N) x √ Deff   
 </div>
 
 <br>where
 
 <div align="center">
-DEFF = 1 + (nc - 1) * ρ 
+Deff = 1 + (nc - 1) * ρ 
 </div>
 
 <br> in which nc is the avearge cluster size and ρ is intraclass correlation or spatial autocorrelation coefficient, which can be esimated via Moran's i.
