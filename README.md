@@ -76,9 +76,15 @@ SEadjusted = √ (p(1 - p)/Neff) = √(p(1-p)/N) x √ DEFF
 DEFF = 1 + (nc - 1) * ρ 
 </div>
 
-<br> where nc is the avearge cluster size and ρ is intraclass correlation or spatial autocorrelation coefficient, which can be esimated via Moran's i.
+<br> in which nc is the avearge cluster size and ρ is intraclass correlation or spatial autocorrelation coefficient, which can be esimated via Moran's i.
 
 <br> or where
+
+<div align="center">
+Neff = N/ (1 + (N - 1)ρ
+</div>
+
+<br> This yields the revised formula
 
 <div align="center">
 Neff = N/ (1 + (N - 1)ρ
