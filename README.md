@@ -89,8 +89,8 @@ Neff = N/ (1 + (N - 1)ρ
 SEadjusted = √p(1-p)/Neff =  √p(1-p)/N *   √1 + (N - 1)ρ
 </div>
 
-**Example Impact**
-A large underestimation of standard error can be observed in an example applicaton where p = 0.4, N = 1,000, and Moran's i (ρ) = .2
+<br>**Example Impact**
+<br>A large underestimation of standard error can be observed in an example applicaton where p = 0.4, N = 1,000, and Moran's i (ρ) = .2
 
 Then:
 <div align="center">
