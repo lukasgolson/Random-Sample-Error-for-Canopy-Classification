@@ -38,9 +38,9 @@ to and subtracted from the estimate (i.e., 0.33) to obtain the confidence interv
 
 **Less than 10 points classified in category**  
 If the number of points classified in a category (n) is less than 10, a different SE formula (Poisson) should be used as the normal approximation cannot be relied upon with a small sample size (<10) (Hodges and Lehmann, 1964).  
-In this case:  
+In this case, standard error is calculated using the formula  
 <div align="center">
-SE = (√n) / N. 
+SE = (√n) / N
 </div>
 
 <br>For example, if n = 5 and N = 1000, p = n/N (i.e., 5/1,000 = 0.005) and SE = √5 / 1000 = 0.0022. Thus the tree cover estimate would be 0.5% with a SE of 0.22%.
