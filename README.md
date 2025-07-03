@@ -12,11 +12,10 @@ classified within a city as either “tree” or “non‐tree” as a means to 
 N = total number of sampled points (i.e, 1,000)  
 n = total number of points classified as tree (i.e., 330), and  
 p = n/N (i.e., 330/1,000 = 0.33)  
-q = 1 – p (i.e., 1 ‐ 0.33 = 0.67)
 
 And using the formula
 <div align="center">
-SE = √ (pq/N)  
+SE = sqrt(p * (1 - p) / N)
 </div>
 
 <br>Thus in this example, tree cover in the city is estimated at 33% with a SE of 1.5%. Based on the SE formula, SE is greatest when p=0.5 and least when p is very small or very large (Table 1).
@@ -89,3 +88,17 @@ Neff = N/ (1 + (N - 1)ρ
 <div align="center">
 SEadjusted = √p(1-p)/Neff =  √p(1-p)/N *   √1 + (N - 1)ρ
 </div>
+
+*Example Impact*
+A large underestimation of standard error can be observed in an example applicaton where p = 0.4, N = 1,000, and Moran's i (ρ) = .2
+
+Then:
+<div align="center">
+SEadjusted = √p(1-p)/Neff =  √p(1-p)/N *   √1 + (N - 1)ρ
+</div>
+
+So:
+<div align="center">
+SEadjusted = √p(1-p)/Neff =  √p(1-p)/N *   √1 + (N - 1)ρ
+</div>
+
