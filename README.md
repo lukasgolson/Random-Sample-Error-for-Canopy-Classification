@@ -15,12 +15,12 @@ p = n/N (i.e., 330/1,000 = 0.33)
 
 And using the formula
 <div align="center">
-SE = √(p * (1 - p) / N)
+SE = √ (p * (1 - p) / N)
 </div>
 
 <br>Thus in this example, tree cover in the city is estimated at 33% with a SE of 1.5%. Based on the SE formula, SE is greatest when p=0.5 and least when p is very small or very large (Table 1).
 <div align="center">
-SE = √ (0.33 x 0.67 / 1,000) = 0.0149
+SE = √ (0.33 * 0.67 / 1,000) = 0.0149
 </div>
 
 <br>**Table 1. Estimate of SE**  
