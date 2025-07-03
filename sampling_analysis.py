@@ -12,7 +12,7 @@ num_samples = 200
 
 # Calculate the true canopy cover using direct calculation and simulate random sampling
 true_cover = calculate_direct_cover(canopy_map)
-estimated_cover, sample_x, sample_y = simulate_random_sampling(canopy_map, num_samples)
+estimated_cover, sample_x, sample_y = simulate_random_sampling(canopy_map, num_samples, True)
 
 # Visualize the results
 fig, ax = plt.subplots(figsize=(8, 8))

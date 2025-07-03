@@ -64,7 +64,7 @@ if __name__ == "__main__":
         "MAP_WIDTH": 100,
         "MAP_HEIGHT": 100,
         "NUM_SAMPLES_PER_SET": 100,
-        "NUM_MAPS": 200,
+        "NUM_MAPS": 2000,
         "NUM_SAMPLE_SETS_PER_MAP": 100,
         "CLUSTERING": 50,
     }

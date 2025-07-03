@@ -29,7 +29,7 @@ def simulate_random_sampling(canopy_map, num_samples, with_coordinates=False):
 
 def get_single_estimate(canopy_map, num_samples):
     """Performs a random sample run and returns the single estimated cover."""
-    if num_samples == 0:
+    if num_samples <= 0:
         return 0
     height, width = canopy_map.shape
     sample_x = np.random.randint(0, width, num_samples)

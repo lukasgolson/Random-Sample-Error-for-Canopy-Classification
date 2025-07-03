@@ -8,11 +8,7 @@ from tqdm import tqdm
 import multiprocessing
 import os
 from canopy_model import generate_canopy_map
-from canopy_sampling import get_single_estimate
-from sampling_analysis import calculate_direct_cover
-
-
-
+from canopy_sampling import calculate_direct_cover, get_single_estimate
 
 
 # --- Main Analysis Function ---
