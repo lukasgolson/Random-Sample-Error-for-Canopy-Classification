@@ -222,7 +222,8 @@ def run_simulation_and_plot():
 
 # Calculates the proportion of hits, standard error, and confidence intervals
 def calculate_itree_stats(n_hits, n_total):
-    if n_total == 0: return 0, 0, 0, 0
+    if n_total == 0:
+        return 0, 0, 0, 0
     p = n_hits / n_total
     q = 1 - p
     if n_hits < 10:
@@ -281,8 +282,8 @@ def analyze_sample_size_agreement(config, target_canopy_cover):
 
     with multiprocessing.Pool(processes=4) as pool:
         for n_samples in sample_sizes:
-            task_args = [(canopy_map, n_samples)] * num_trials
-            estimates = pool.starmap(get_single_estimate, task_args)
+            task_args = [(canopy_map, n_samples, False)] * num_trials
+            estimates = pool.starmap(simulate_random_sampling, task_args)
 
             in_agreement_count = np.sum(np.abs(np.array(estimates) - true_cover) <= tolerance)
             agreement_percent = (in_agreement_count / num_trials) * 100
