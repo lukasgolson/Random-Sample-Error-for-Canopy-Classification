@@ -29,16 +29,6 @@ def simulate_random_sampling(canopy_map, num_samples, with_coordinates=False):
     else:
         return estimated_proportion * 100
 
-# Performs a random sample run and returns the single estimated cover
-def get_single_estimate(canopy_map, num_samples):
-    if num_samples <= 0:
-        return 0
-    height, width = canopy_map.shape
-    sample_x = np.random.randint(0, width, num_samples)
-    sample_y = np.random.randint(0, height, num_samples)
-    canopy_hits = np.sum(canopy_map[sample_y, sample_x])
-    return (canopy_hits / num_samples) * 100
-
 # Generates a binary raster simulating a canopy presence map
 def generate_canopy_map(width=100, height=100, clustering=50, canopy_cover=0.5, seed=None):
 
@@ -273,17 +263,6 @@ def run_monte_carlo(config):
         true_covers.append(true_cover)
         estimated_covers.extend(est_list)
     return np.array(true_covers), np.array(estimated_covers)
-
-# Performs a random sample run and returns the single estimated cover
-def get_single_estimate(canopy_map, num_samples):
-
-    if num_samples == 0: # Handle edge case where a map has 0% cover to avoid divide-by-zero if num_samples is 0
-        return 0
-    height, width = canopy_map.shape
-    sample_x = np.random.randint(0, width, num_samples)
-    sample_y = np.random.randint(0, height, num_samples)
-    canopy_hits = np.sum(canopy_map[sample_y, sample_x])
-    return (canopy_hits / num_samples) * 100
 
 # Analyzes the relationship between sample size and agreement for a given canopy cover
 def analyze_sample_size_agreement(config, target_canopy_cover):
