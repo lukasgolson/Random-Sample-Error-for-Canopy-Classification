@@ -14,8 +14,24 @@ from canopy_model import generate_canopy_map
 ## ------------------------------------------------- DEFINE SIMULATION -------------------------------------------------
 #region
 
+# Analysis configuration
+MIN_SAMPLE_SIZE = 10 # Minimum number of sample points
+MAX_SAMPLE_SIZE = 50 # Maximum number of sample points
+INCREMENT_SIZE = 25 # Increment between the number of sample points
 
+MIN_CANOPY_COVER = 0 # Minimum total canopy cover percentages
+MAX_CANOPY_COVER = 60 # Maximum total canopy cover percentages
+INCREMENT_CANOPY_COVER = 5 # Increment between the canopy cover percentages
 
+trials = 10000 # Number of trials (bootstraps)
+agreement_tolerance = 2.5 # Proximity to true canopy cover considered acceptable (%)
+
+# AOI definitions (in pixels, assuming 30 cm resolution)
+AOIS = {
+    "Neighbourhood": (14907, 14907), # Neighbourhood (20 km²) AOI
+    "City": (66667, 66667), # City (400 km²) AOI
+    "Region": (182574, 182574), # Region / County (3,000 km²) AOI
+}
 
 #endregion
 
@@ -64,26 +80,22 @@ def analyze_sample_size_agreement(config, target_canopy_cover):
 #region
 
 if __name__ == "__main__":
-    # --- ANALYSIS CONFIGURATION ---
-    MIN_SAMPLE_SIZE = 10
-    MAX_SAMPLE_SIZE = 50
-    INCREMENT_SIZE = 25
 
+    # Configuration from Define Simulation block
+    canopy_cover_levels_to_test = np.arange(MIN_CANOPY_COVER, MAX_CANOPY_COVER + 1, INCREMENT_CANOPY_COVER) / 100.0
     sample_sizes_to_test = np.arange(MIN_SAMPLE_SIZE, MAX_SAMPLE_SIZE + 1, INCREMENT_SIZE)
 
     CONFIG = {
         "SAMPLE_SIZES_TO_TEST": sample_sizes_to_test,
-        "NUM_TRIALS_PER_SIZE": 10000,  # Number of bootstraps
-        "AGREEMENT_TOLERANCE": 2.5,
+        "NUM_TRIALS_PER_SIZE": trials,
+        "AGREEMENT_TOLERANCE": agreement_tolerance,
     }
 
-    # --- Plotting Setup ---
+    # Plotting setup
     plt.style.use('seaborn-v0_8-whitegrid')
     fig, ax = plt.subplots(figsize=(12, 8))
 
-    # --- Run Analysis for Each Canopy Cover Level ---
-    canopy_cover_levels_to_test = np.arange(0, 61, 5) / 100.0  # 0% to 60% in increments of 5%
-
+    # Run analysis for each canopy cover Level
     for cover_level in tqdm(canopy_cover_levels_to_test, desc="Overall Progress"):
         print(f"\n--- Running analysis for Canopy Cover: {cover_level:.0%} ---")
 
@@ -93,7 +105,7 @@ if __name__ == "__main__":
         ax.plot(sample_sizes, agreement_percents, marker='o', linestyle='-', markersize=4,
                 label=f'True Cover: {actual_cover:.1f}%')
 
-    # --- Finalize Visualization ---
+    # Finalize visualization
     ax.axhline(y=95, color='r', linestyle='--', label='95% Confidence Target')
     ax.set_xlabel('Number of Sample Points', fontsize=12)
     ax.set_ylabel(f'Proportion of Estimates within ±{CONFIG["AGREEMENT_TOLERANCE"]}% of the True Canopy Cover', fontsize=12)
