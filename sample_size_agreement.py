@@ -1,18 +1,18 @@
 # This script answers the question:
 # How does the reliability of my estimate change as I increase the number of sample points?
 
-
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import multiprocessing
-import os
 from canopy_model import generate_canopy_map
 
+## -------------------------------------------------- DEFINE FUNCTIONS -------------------------------------------------
+#region
 
-# --- Helper Function ---
+# Performs a random sample run and returns the single estimated cover
 def get_single_estimate(canopy_map, num_samples):
-    """Performs a random sample run and returns the single estimated cover."""
+
     # Handle edge case where a map has 0% cover to avoid divide-by-zero if num_samples is 0
     if num_samples == 0:
         return 0
@@ -22,12 +22,9 @@ def get_single_estimate(canopy_map, num_samples):
     canopy_hits = np.sum(canopy_map[sample_y, sample_x])
     return (canopy_hits / num_samples) * 100
 
-
-# --- Main Analysis Function ---
+#  Analyzes the relationship between sample size and agreement for a given canopy cover
 def analyze_sample_size_agreement(config, target_canopy_cover):
-    """
-    Analyzes the relationship between sample size and agreement for a given canopy cover.
-    """
+
     sample_sizes = config['SAMPLE_SIZES_TO_TEST']
     num_trials = config['NUM_TRIALS_PER_SIZE']
     tolerance = config['AGREEMENT_TOLERANCE']
@@ -51,11 +48,13 @@ def analyze_sample_size_agreement(config, target_canopy_cover):
 
     return sample_sizes, agreement_results, true_cover
 
+## -------------------------------- MAIN EXECUTION: Run Sample Size Reliability Analysis -------------------------------
+#region
 
 if __name__ == "__main__":
     # --- ANALYSIS CONFIGURATION ---
     MIN_SAMPLE_SIZE = 10
-    MAX_SAMPLE_SIZE = 750
+    MAX_SAMPLE_SIZE = 5000
     INCREMENT_SIZE = 25
 
     sample_sizes_to_test = np.arange(MIN_SAMPLE_SIZE, MAX_SAMPLE_SIZE + 1, INCREMENT_SIZE)
@@ -84,11 +83,13 @@ if __name__ == "__main__":
 
     # --- Finalize Visualization ---
     ax.axhline(y=95, color='r', linestyle='--', label='95% Confidence Target')
-    ax.set_title('Sample Size vs. Reliability for Varying Canopy Covers', fontsize=16)
     ax.set_xlabel('Number of Sample Points', fontsize=12)
     ax.set_ylabel(f'Agreement with True Cover (±{CONFIG["AGREEMENT_TOLERANCE"]}%)', fontsize=12)
     ax.set_ylim(0, 105)
+    ax.grid(False)
     ax.legend(title="Canopy Cover Level", bbox_to_anchor=(1.04, 1), loc="upper left")
 
     fig.tight_layout()
     plt.show()
+
+#endregion
