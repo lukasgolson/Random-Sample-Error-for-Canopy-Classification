@@ -1,5 +1,6 @@
 # This script answers the question:
 # How does the reliability of my estimate change as I increase the number of sample points?
+# Results: Paragraph 1, Figure 1
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -54,15 +55,15 @@ def analyze_sample_size_agreement(config, target_canopy_cover):
 if __name__ == "__main__":
     # --- ANALYSIS CONFIGURATION ---
     MIN_SAMPLE_SIZE = 10
-    MAX_SAMPLE_SIZE = 5000
+    MAX_SAMPLE_SIZE = 50
     INCREMENT_SIZE = 25
 
     sample_sizes_to_test = np.arange(MIN_SAMPLE_SIZE, MAX_SAMPLE_SIZE + 1, INCREMENT_SIZE)
 
     CONFIG = {
         "SAMPLE_SIZES_TO_TEST": sample_sizes_to_test,
-        "NUM_TRIALS_PER_SIZE": 10000,  # Lowered for faster multi-run execution
-        "AGREEMENT_TOLERANCE": 2.5,
+        "NUM_TRIALS_PER_SIZE": 10000,  # Number of bootstraps
+        "AGREEMENT_TOLERANCE": 1.5,
     }
 
     # --- Plotting Setup ---
@@ -70,7 +71,7 @@ if __name__ == "__main__":
     fig, ax = plt.subplots(figsize=(12, 8))
 
     # --- Run Analysis for Each Canopy Cover Level ---
-    canopy_cover_levels_to_test = np.arange(0, 41, 5) / 100.0  # 0% to 40%
+    canopy_cover_levels_to_test = np.arange(0, 61, 5) / 100.0  # 0% to 60% in increments of 5%
 
     for cover_level in tqdm(canopy_cover_levels_to_test, desc="Overall Progress"):
         print(f"\n--- Running analysis for Canopy Cover: {cover_level:.0%} ---")
