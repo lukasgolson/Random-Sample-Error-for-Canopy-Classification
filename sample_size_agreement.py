@@ -2,11 +2,22 @@
 # How does the reliability of my estimate change as I increase the number of sample points?
 # Results: Paragraph 1, Figure 1
 
+# Notes
+# Each pixel represents a 30 cm x 30 cm cell
+
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import multiprocessing
 from canopy_model import generate_canopy_map
+
+## ------------------------------------------------- DEFINE SIMULATION -------------------------------------------------
+#region
+
+
+
+
+#endregion
 
 ## -------------------------------------------------- DEFINE FUNCTIONS -------------------------------------------------
 #region
@@ -63,7 +74,7 @@ if __name__ == "__main__":
     CONFIG = {
         "SAMPLE_SIZES_TO_TEST": sample_sizes_to_test,
         "NUM_TRIALS_PER_SIZE": 10000,  # Number of bootstraps
-        "AGREEMENT_TOLERANCE": 1.5,
+        "AGREEMENT_TOLERANCE": 2.5,
     }
 
     # --- Plotting Setup ---
@@ -85,7 +96,7 @@ if __name__ == "__main__":
     # --- Finalize Visualization ---
     ax.axhline(y=95, color='r', linestyle='--', label='95% Confidence Target')
     ax.set_xlabel('Number of Sample Points', fontsize=12)
-    ax.set_ylabel(f'Agreement with True Cover (±{CONFIG["AGREEMENT_TOLERANCE"]}%)', fontsize=12)
+    ax.set_ylabel(f'Proportion of Estimates within ±{CONFIG["AGREEMENT_TOLERANCE"]}% of the True Canopy Cover', fontsize=12)
     ax.set_ylim(0, 105)
     ax.grid(False)
     ax.legend(title="Canopy Cover Level", bbox_to_anchor=(1.04, 1), loc="upper left")
