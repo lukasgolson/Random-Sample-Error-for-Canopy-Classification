@@ -51,7 +51,7 @@ def get_single_estimate(canopy_map, num_samples):
     return (canopy_hits / num_samples) * 100
 
 #  Analyzes the relationship between sample size and agreement for a given canopy cover
-def analyze_sample_size_agreement(config, target_canopy_cover):
+def analyze_sample_size_agreement(config, target_canopy_cover, width, height):
 
     sample_sizes = config['SAMPLE_SIZES_TO_TEST']
     num_trials = config['NUM_TRIALS_PER_SIZE']
@@ -59,8 +59,9 @@ def analyze_sample_size_agreement(config, target_canopy_cover):
 
     # Generate a representative map with the specified target canopy cover
     canopy_map = generate_canopy_map(
-        width=200, height=200, clustering=65, canopy_cover=target_canopy_cover, seed=42
+        width=width, height=height, clustering=65, canopy_cover=target_canopy_cover, seed=42
     )
+
     true_cover = np.mean(canopy_map) * 100
 
     agreement_results = []
@@ -80,7 +81,6 @@ def analyze_sample_size_agreement(config, target_canopy_cover):
 #region
 
 if __name__ == "__main__":
-
     # Configuration from Define Simulation block
     canopy_cover_levels_to_test = np.arange(MIN_CANOPY_COVER, MAX_CANOPY_COVER + 1, INCREMENT_CANOPY_COVER) / 100.0
     sample_sizes_to_test = np.arange(MIN_SAMPLE_SIZE, MAX_SAMPLE_SIZE + 1, INCREMENT_SIZE)
@@ -91,29 +91,38 @@ if __name__ == "__main__":
         "AGREEMENT_TOLERANCE": agreement_tolerance,
     }
 
-    # Plotting setup
-    plt.style.use('seaborn-v0_8-whitegrid')
-    fig, ax = plt.subplots(figsize=(12, 8))
+    # AOI definitions (in pixels, assuming 30 cm resolution)
+    AOIS = {
+        "Neighbourhood (20 km²)": (14907, 14907),
+        "City (400 km²)": (66667, 66667),
+        "Region (3,000 km²)": (182574, 182574),
+    }
 
-    # Run analysis for each canopy cover Level
-    for cover_level in tqdm(canopy_cover_levels_to_test, desc="Overall Progress"):
-        print(f"\n--- Running analysis for Canopy Cover: {cover_level:.0%} ---")
+    for aoi_name, (width, height) in AOIS.items():
+        print(f"\n\n=== Running simulations for {aoi_name} ===")
 
-        sample_sizes, agreement_percents, actual_cover = analyze_sample_size_agreement(CONFIG, cover_level)
+        fig, ax = plt.subplots(figsize=(12, 8))
+        plt.style.use('seaborn-v0_8-whitegrid')
 
-        # Plot the result for this canopy cover level
-        ax.plot(sample_sizes, agreement_percents, marker='o', linestyle='-', markersize=4,
-                label=f'True Cover: {actual_cover:.1f}%')
+        for cover_level in tqdm(canopy_cover_levels_to_test, desc=f"{aoi_name} Progress"):
+            print(f"--- Canopy Cover: {cover_level:.0%} ---")
+            sample_sizes, agreement_percents, actual_cover = analyze_sample_size_agreement(
+                CONFIG, cover_level, width, height
+            )
 
-    # Finalize visualization
-    ax.axhline(y=95, color='r', linestyle='--', label='95% Confidence Target')
-    ax.set_xlabel('Number of Sample Points', fontsize=12)
-    ax.set_ylabel(f'Proportion of Estimates within ±{CONFIG["AGREEMENT_TOLERANCE"]}% of the True Canopy Cover', fontsize=12)
-    ax.set_ylim(0, 105)
-    ax.grid(False)
-    ax.legend(title="Canopy Cover Level", bbox_to_anchor=(1.04, 1), loc="upper left")
+            ax.plot(sample_sizes, agreement_percents, marker='o', linestyle='-', markersize=4,
+                    label=f'True Cover: {actual_cover:.1f}%')
 
-    fig.tight_layout()
-    plt.show()
+        # Finalize visualization for this AOI
+        ax.axhline(y=95, color='r', linestyle='--', label='95% Confidence Target')
+        ax.set_xlabel('Number of Sample Points', fontsize=12)
+        ax.set_ylabel(f'Proportion of Estimates within ±{CONFIG["AGREEMENT_TOLERANCE"]}% of the True Canopy Cover', fontsize=12)
+        ax.set_ylim(0, 105)
+        ax.grid(False)
+        ax.legend(title="Canopy Cover Level", bbox_to_anchor=(1.04, 1), loc="upper left")
+        ax.set_title(f"Sampling Agreement for {aoi_name}", fontsize=14, fontweight='bold')
+
+        fig.tight_layout()
+        plt.show()
 
 #endregion
