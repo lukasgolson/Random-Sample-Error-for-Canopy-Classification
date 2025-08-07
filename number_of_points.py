@@ -24,14 +24,14 @@ MIN_CLUSTERING = 0 # Minimum level of clustering
 MAX_CLUSTERING = 100 # Maximum level of clustering
 INCREMENT_CLUSTERING = 25 # Increment between the clustering levels
 
-trials = 10 # Number of trials (bootstraps)
-agreement_tolerance = 2.5 # Proximity to true canopy cover considered acceptable (%)
+trials = 10000 # Number of trials (bootstraps)
+agreement_tolerance = 1 # Proximity to true canopy cover considered acceptable (%)
 
 # AOI definitions (in pixels, assuming 30 cm resolution)
 AOIS = {
-    "Neighbourhood (20 km²)": (1490, 1490), # Neighbourhood (20 km²) AOI
-    "City (400 km²)": (666, 666), # City (400 km²) AOI
-    "Region (3,000 km²)": (1824, 1824), # Region / County (3,000 km²) AOI
+    "Neighbourhood (20 km²)": (14907, 14907), # Neighbourhood (20 km²) AOI
+    "City (400 km²)": (66667, 66667), # City (400 km²) AOI
+    "Region (3,000 km²)": (182574, 182574), # Region / County (3,000 km²) AOI
 }
 
 #endregion
