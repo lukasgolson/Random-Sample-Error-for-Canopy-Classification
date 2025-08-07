@@ -275,12 +275,16 @@ if __name__ == "__main__":
                     marker='o', label=f"Clustering {clustering}")
 
         ax.set_title(aoi_name, fontsize=19, fontweight='bold')
-        ax.set_xlabel('Number of Sample Points Required to Reach 95% Confidence Interval', fontsize=17)
+        ax.set_xlabel('Sample Points to Reach 95% Agreeance', fontsize=17, labelpad=15)
         ax.set_ylabel('Canopy Cover (%)', fontsize=17)
         ax.tick_params(axis='both', labelsize=15)
         ax.set_xlim(left=0)
         ax.set_ylim(bottom=0)
         ax.grid(False)
+
+        # Remove 0 from x-axis tick labels
+        xticks = ax.get_xticks()
+        ax.set_xticks([tick for tick in xticks if tick != 0])
 
     # Remove y-axis label from top-right
     axes[1].set_ylabel('')
@@ -294,7 +298,7 @@ if __name__ == "__main__":
 
     # Adjust layout and spacing
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.25, wspace=0.3)  # Increased column spacing with wspace
+    fig.subplots_adjust(hspace=0.25, wspace=0.15)  # Increased column spacing with wspace
 
     plt.show()
 
