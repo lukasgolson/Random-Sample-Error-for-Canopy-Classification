@@ -148,6 +148,9 @@ if __name__ == "__main__":
     fig.tight_layout()
     fig.subplots_adjust(hspace=0.25)
 
+    # Save figure
+    fig.savefig("Figure 2 - Number of Sample Points.png", dpi=600, bbox_inches='tight')
+
     plt.show()
 
     # Print standalone agreement plots for each AOI
@@ -185,6 +188,11 @@ if __name__ == "__main__":
                          title_fontproperties=bold_font, frameon=False)
 
         fig_single.tight_layout()
+
+        # Save figure
+        fig_single.savefig(f"Appendix A Figure - Number of Sample Points_{aoi_name.replace(' ', '_')}.png",
+                           dpi=450, bbox_inches='tight')
+
         plt.show()
 
     # Show each stored canopy map
@@ -195,6 +203,11 @@ if __name__ == "__main__":
         ax_map.set_xticks([])
         ax_map.set_yticks([])
         plt.tight_layout()
+
+        # Save figure
+        fig_map.savefig("Appendix A Figure - Canopy Map {aoi_name.replace(' ', '_')}.png",
+                        dpi=450, bbox_inches='tight')
+
         plt.show()
 
 #endregion
