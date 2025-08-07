@@ -91,11 +91,12 @@ if __name__ == "__main__":
         "AGREEMENT_TOLERANCE": agreement_tolerance,
     }
 
-    for aoi_name, (width, height) in AOIS.items():
-        print(f"\n\n=== Running simulations for {aoi_name} ===")
+    # Prepare a 1-row, 3-column figure
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6), constrained_layout=True)
+    plt.style.use('seaborn-v0_8-whitegrid')
 
-        fig, ax = plt.subplots(figsize=(12, 8))
-        plt.style.use('seaborn-v0_8-whitegrid')
+    for ax, (aoi_name, (width, height)) in zip(axes, AOIS.items()):
+        print(f"\n\n=== Running simulations for {aoi_name} ===")
 
         for cover_level in tqdm(canopy_cover_levels_to_test, desc=f"{aoi_name} Progress"):
             print(f"--- Canopy Cover: {cover_level:.0%} ---")
@@ -104,18 +105,22 @@ if __name__ == "__main__":
             )
 
             ax.plot(sample_sizes, agreement_percents, marker='o', linestyle='-', markersize=4,
-                    label=f'True Cover: {actual_cover:.1f}%')
+                    label=f'{actual_cover:.1f}%')
 
-        # Finalize visualization for this AOI
-        ax.axhline(y=95, color='r', linestyle='--', label='95% Confidence Target')
-        ax.set_xlabel('Number of Sample Points', fontsize=12)
-        ax.set_ylabel(f'Proportion of Estimates within ±{CONFIG["AGREEMENT_TOLERANCE"]}% of the True Canopy Cover', fontsize=12)
+        # Finalize each subplot
+        ax.axhline(y=95, color='r', linestyle='--', label='95% Target')
+        ax.set_title(aoi_name, fontsize=13, fontweight='bold')
+        ax.set_xlabel('Number of Sample Points', fontsize=11)
         ax.set_ylim(0, 105)
         ax.grid(False)
-        ax.legend(title="Canopy Cover Level", bbox_to_anchor=(1.04, 1), loc="upper left")
-        ax.set_title(f"Sampling Agreement for {aoi_name}", fontsize=14, fontweight='bold')
 
-        fig.tight_layout()
-        plt.show()
+    # Set shared y-axis label
+    axes[0].set_ylabel(f'Proportion of Estimates within ±{CONFIG["AGREEMENT_TOLERANCE"]}% of True Canopy Cover', fontsize=11)
+
+    # Add a single legend for all plots
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, title="True Cover", loc='upper center', ncol=len(labels), frameon=False)
+
+    plt.show()
 
 #endregion
