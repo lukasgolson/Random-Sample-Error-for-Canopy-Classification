@@ -81,6 +81,7 @@ def analyze_sample_size_agreement(config, target_canopy_cover, width, height):
 #region
 
 if __name__ == "__main__":
+
     # Configuration
     canopy_cover_levels_to_test = np.arange(MIN_CANOPY_COVER, MAX_CANOPY_COVER + 1, INCREMENT_CANOPY_COVER) / 100
     sample_sizes_to_test = np.arange(MIN_SAMPLE_SIZE, MAX_SAMPLE_SIZE + 1, INCREMENT_SIZE)
@@ -230,8 +231,11 @@ if __name__ == "__main__":
         "AGREEMENT_TOLERANCE": agreement_tolerance,
     }
 
+    # Prepare 2x2 figure
     fig, axes = plt.subplots(2, 2, figsize=(18, 12))
     plt.style.use('seaborn-v0_8-whitegrid')
+
+    # Flatten axes for easy indexing
     axes = axes.flatten()
 
     print(f"\nRunning simulations for:")
@@ -271,16 +275,23 @@ if __name__ == "__main__":
                     required_sample_sizes.append(np.nan)
 
             # Switch axes: X = sample size, Y = canopy cover
-            ax.plot(required_sample_sizes, canopy_cover_levels_to_test * 100,
-                    marker='o', label=f"Clustering {clustering}")
+            ax.plot(required_sample_sizes, canopy_cover_levels_to_test * 100, marker='o',
+                    label=f"Clustering {clustering}")
 
         ax.set_title(aoi_name, fontsize=19, fontweight='bold')
-        ax.set_xlabel('Sample Points to Reach 95% Agreeance', fontsize=17, labelpad=15)
+        ax.set_xlabel('Sample Points to Reach 95% Agreeance', fontsize=17, labelpad=10)
         ax.set_ylabel('Canopy Cover (%)', fontsize=17)
         ax.tick_params(axis='both', labelsize=15)
+        ax.minorticks_on()
+        ax.tick_params(axis='both', which='major', length=5, width=1.5)
         ax.set_xlim(left=0)
-        ax.set_ylim(bottom=0)
+        ax.set_ylim(0, 65)
         ax.grid(False)
+
+        # Make the plot border (spines) black
+        for spine in ax.spines.values():
+            spine.set_color('black')
+            spine.set_linewidth(1)
 
         # Remove 0 from x-axis tick labels
         xticks = ax.get_xticks()
@@ -298,7 +309,7 @@ if __name__ == "__main__":
 
     # Adjust layout and spacing
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.25, wspace=0.15)  # Increased column spacing with wspace
+    fig.subplots_adjust(hspace=0.25, wspace=0.08)  # Increased column spacing with wspace
 
     plt.show()
 
