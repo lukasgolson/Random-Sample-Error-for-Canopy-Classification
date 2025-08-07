@@ -40,7 +40,7 @@ AOIS = {
 
 if __name__ == "__main__":
     # Configuration from Define Simulation block
-    canopy_cover_levels_to_test = np.arange(MIN_CANOPY_COVER, MAX_CANOPY_COVER + 1, INCREMENT_CANOPY_COVER) / 100.0
+    canopy_cover_levels_to_test = np.arange(MIN_CANOPY_COVER, MAX_CANOPY_COVER + 1, INCREMENT_CANOPY_COVER) / 100
     sample_sizes_to_test = np.arange(MIN_SAMPLE_SIZE, MAX_SAMPLE_SIZE + 1, INCREMENT_SIZE)
 
     CONFIG = {
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         print(f"\n\n=== Running simulations for {aoi_name} ===")
 
         for cover_level in tqdm(canopy_cover_levels_to_test, desc=f"{aoi_name} Progress"):
-            print(f"--- Canopy Cover: {cover_level:.0%} ---")
+            print(f"--- Canopy Cover: {cover_level:%} ---")
             sample_sizes, agreement_percents, actual_cover = analyze_sample_size_agreement(
                 CONFIG, cover_level, width, height
             )
@@ -72,13 +72,13 @@ if __name__ == "__main__":
         ax.set_ylim(0, 105)
         ax.grid(False)
 
-    # Adjust space to make room for legend
-    plt.subplots_adjust(top=0.80)  # Allows space above plots
+    # Adjust bottom spacing to make room for the legend
+    plt.subplots_adjust(bottom=0.22)
 
-    # Shared legend above
+    # Shared legend below the figure
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, title="True Canopy Cover",
-               loc='upper center', bbox_to_anchor=(0.5, 0.98),
+               loc='lower center', bbox_to_anchor=(0.5, -0.05),
                ncol=7, fontsize=9, title_fontsize=10, frameon=False)
 
     plt.show()
