@@ -101,3 +101,6 @@ So:
 <div align="center">
 SEadjusted = √((0.4 * 0.6) / 4.98) = 0.219 &nbsp;&nbsp;&nbsp;&nbsp vs. &nbsp;&nbsp;&nbsp;&nbsp SE = √((0.4 * 0.6) / 1000) = 0.015
 </div>
+
+# Python Code Files
+**sample_size_agreement.py**: Used to calculate the minimum number of sample points required for 95% of 10,000 trials to fall within ±2.5% of the true canopy cover.
