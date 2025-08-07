@@ -99,8 +99,8 @@ if __name__ == "__main__":
     axes[3].axis('off')
     handles, labels = axes[0].get_legend_handles_labels()
     bold_font = FontProperties(weight='bold', size=18)
-    legend = axes[3].legend(handles, labels, title="Canopy Cover Extent",
-                            loc='center', fontsize=16, title_fontproperties=bold_font, frameon=False)
+    legend = axes[3].legend(handles, labels, title="Canopy Cover Extent", loc='center',
+                            fontsize=16, title_fontproperties=bold_font, frameon=True)
 
     # Adjust layout and spacing
     fig.tight_layout()
@@ -130,16 +130,16 @@ if __name__ == "__main__":
                            label=f'{actual_cover:.1f}%')
 
         ax_single.axhline(y=95, color='r', linestyle='--', label='95% Target')
-        ax_single.set_title(aoi_name, fontsize=17, fontweight='bold')
-        ax_single.set_xlabel('Number of Sample Points', fontsize=15)
-        ax_single.set_ylabel('Agreement Within Tolerance (%)', fontsize=15)
+        ax_single.set_title(aoi_name, fontsize=15, fontweight='bold')
+        ax_single.set_xlabel('Number of Sample Points', fontsize=13)
+        ax_single.set_ylabel('Agreement Within Tolerance (%)', fontsize=13)
         ax_single.set_ylim(0, 105)
         ax_single.tick_params(axis='both', labelsize=13)
         ax_single.grid(False)
 
-        bold_font = FontProperties(weight='bold', size=16)
+        bold_font = FontProperties(weight='bold', size=12)
         ax_single.legend(title="Canopy Cover Extent", loc='center left',
-                         bbox_to_anchor=(1.05, 0.5), fontsize=14,
+                         bbox_to_anchor=(1.05, 0.5), fontsize=10,
                          title_fontproperties=bold_font, frameon=False)
 
         fig_single.tight_layout()
