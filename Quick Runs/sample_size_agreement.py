@@ -77,7 +77,7 @@ def analyze_sample_size_agreement(config, target_canopy_cover, width, height):
 
 #endregion
 
-## -------------------------------- MAIN EXECUTION: Run Sample Size Reliability Analysis -------------------------------
+## ---------------------------------- APPENDIX A: Run Sample Size Reliability Analysis ---------------------------------
 #region
 
 if __name__ == "__main__":
@@ -148,11 +148,16 @@ if __name__ == "__main__":
     fig.tight_layout()
     fig.subplots_adjust(hspace=0.25)
 
+    # Save figure
+    #fig.savefig("Figure 2 - Number of Sample Points.png", dpi=600, bbox_inches='tight')
+
     plt.show()
+
+    print(f"\nRe-plotting standalone figure for:")
 
     # Print standalone agreement plots for each AOI
     for i, (aoi_name, (width, height)) in enumerate(AOIS.items()):
-        print(f"\n\n=== Re-plotting standalone figure for {aoi_name} ===")
+        print(f" - {aoi_name}")
 
         fig_single, ax_single = plt.subplots(figsize=(8, 6))
         sample_cover = 0.3
@@ -185,6 +190,11 @@ if __name__ == "__main__":
                          title_fontproperties=bold_font, frameon=False)
 
         fig_single.tight_layout()
+
+        # Save figure
+        #fig_single.savefig(f"Appendix A Figure - Number of Sample Points_{aoi_name.replace(' ', '_')}.png",
+                           #dpi=450, bbox_inches='tight')
+
         plt.show()
 
     # Show each stored canopy map
@@ -195,6 +205,97 @@ if __name__ == "__main__":
         ax_map.set_xticks([])
         ax_map.set_yticks([])
         plt.tight_layout()
+
+        # Save figure
+        #fig_map.savefig("Appendix A Figure - Canopy Map {aoi_name.replace(' ', '_')}.png",
+                        #dpi=450, bbox_inches='tight')
+
         plt.show()
+
+#endregion
+
+## ---------------------------------------------- MAIN EXECUTION: Figure 1 ---------------------------------------------
+#region
+
+if __name__ == "__main__":
+
+    # Configuration
+    canopy_cover_levels_to_test = np.arange(MIN_CANOPY_COVER, MAX_CANOPY_COVER + 1, INCREMENT_CANOPY_COVER) / 100
+    sample_sizes_to_test = np.arange(MIN_SAMPLE_SIZE, MAX_SAMPLE_SIZE + 1, INCREMENT_SIZE)
+    clustering_levels = range(0, 101, 20)
+
+    CONFIG = {
+        "SAMPLE_SIZES_TO_TEST": sample_sizes_to_test,
+        "NUM_TRIALS_PER_SIZE": trials,
+        "AGREEMENT_TOLERANCE": agreement_tolerance,
+    }
+
+    fig, axes = plt.subplots(2, 2, figsize=(18, 12))
+    plt.style.use('seaborn-v0_8-whitegrid')
+    axes = axes.flatten()
+
+    print(f"\nRunning simulations for:")
+
+    for i, (aoi_name, (width, height)) in enumerate(AOIS.items()):
+        ax = axes[i]
+        print(f" - {aoi_name}")
+
+        for clustering in clustering_levels:
+            required_sample_sizes = []
+
+            for cover_level in canopy_cover_levels_to_test:
+                canopy_map = generate_canopy_map(
+                    width=width,
+                    height=height,
+                    clustering=clustering,
+                    canopy_cover=cover_level,
+                    seed=42
+                )
+
+                true_cover = np.mean(canopy_map) * 100
+                found = False
+
+                for n_samples in sample_sizes_to_test:
+                    task_args = [(canopy_map, n_samples)] * trials
+                    estimates = [get_single_estimate(canopy_map, n_samples) for _ in range(trials)]
+
+                    in_agreement = np.sum(np.abs(np.array(estimates) - true_cover) <= agreement_tolerance)
+                    agreement = in_agreement / trials * 100
+
+                    if agreement >= 95:
+                        required_sample_sizes.append(n_samples)
+                        found = True
+                        break
+
+                if not found:
+                    required_sample_sizes.append(np.nan)
+
+            # Switch axes: X = sample size, Y = canopy cover
+            ax.plot(required_sample_sizes, canopy_cover_levels_to_test * 100,
+                    marker='o', label=f"Clustering {clustering}")
+
+        ax.set_title(aoi_name, fontsize=19, fontweight='bold')
+        ax.set_xlabel('Number of Sample Points Required to Reach 95% Confidence Interval', fontsize=17)
+        ax.set_ylabel('Canopy Cover (%)', fontsize=17)
+        ax.tick_params(axis='both', labelsize=15)
+        ax.set_xlim(left=0)
+        ax.set_ylim(bottom=0)
+        ax.grid(False)
+
+    # Remove y-axis label from top-right
+    axes[1].set_ylabel('')
+
+    # Use bottom-right for legend
+    axes[3].axis('off')
+    handles, labels = axes[0].get_legend_handles_labels()
+    bold_font = FontProperties(weight='bold', size=18)
+    legend = axes[3].legend(handles, labels, title="Clustering Level", loc='center',
+                            fontsize=16, title_fontproperties=bold_font, frameon=True, ncol=2)
+
+    # Adjust layout and spacing
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.25, wspace=0.3)  # Increased column spacing with wspace
+
+    plt.show()
 
 #endregion
