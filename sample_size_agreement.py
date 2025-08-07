@@ -142,7 +142,7 @@ if __name__ == "__main__":
     handles, labels = axes[0].get_legend_handles_labels()
     bold_font = FontProperties(weight='bold', size=18)
     legend = axes[3].legend(handles, labels, title="Canopy Cover Extent", loc='center',
-                            fontsize=16, title_fontproperties=bold_font, frameon=True)
+                            fontsize=16, title_fontproperties=bold_font, frameon=True, ncol=2)
 
     # Adjust layout and spacing
     fig.tight_layout()
