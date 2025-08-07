@@ -91,13 +91,6 @@ if __name__ == "__main__":
         "AGREEMENT_TOLERANCE": agreement_tolerance,
     }
 
-    # AOI definitions (in pixels, assuming 30 cm resolution)
-    AOIS = {
-        "Neighbourhood (20 km²)": (14907, 14907),
-        "City (400 km²)": (66667, 66667),
-        "Region (3,000 km²)": (182574, 182574),
-    }
-
     for aoi_name, (width, height) in AOIS.items():
         print(f"\n\n=== Running simulations for {aoi_name} ===")
 
