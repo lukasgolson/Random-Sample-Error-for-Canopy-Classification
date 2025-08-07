@@ -77,10 +77,30 @@ if __name__ == "__main__":
 
     # Shared legend below the figure
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, title="True Canopy Cover",
+    fig.legend(handles, labels, title="Canopy Cover",
                loc='lower center', bbox_to_anchor=(0.5, -0.05),
-               ncol=7, fontsize=9, title_fontsize=10, frameon=False)
+               ncol=12, fontsize=10, title_fontsize=12, frameon=False)
 
+    plt.show()
+
+    # Generate and show the canopy map for this AOI
+    sample_cover = 0.3 # Use mid canopy cover (e.g., 30%) just for visualization
+
+    canopy_map = generate_canopy_map(
+        width=width,
+        height=height,
+        clustering=65,
+        canopy_cover=sample_cover,
+        seed=42
+    )
+
+    fig_map, ax_map = plt.subplots(figsize=(6, 6))
+    ax_map.imshow(canopy_map, cmap='Greens', interpolation='nearest')
+    ax_map.set_title(f"{aoi_name} Canopy Map (30% Cover)", fontsize=13)
+    ax_map.set_xticks([])
+    ax_map.set_yticks([])
+
+    plt.tight_layout()
     plt.show()
 
 #endregion
