@@ -1,16 +1,15 @@
 import random
-
 import matplotlib.pyplot as plt
 import noise
 import numpy as np
 from skimage.feature import peak_local_max
 
+## -------------------------------------------------- DEFINE FUNCTIONS -------------------------------------------------
+#region
 
+# Original function using a single threshold on Perlin noise. Results in large, blob-like canopy shapes
 def generate_canopy_map(width=100, height=100, clustering=50, canopy_cover=0.5, seed=None):
-    """
-    Original function using a single threshold on Perlin noise.
-    Results in large, blob-like canopy shapes.
-    """
+
     if clustering == 0:
         if seed is not None:
             np.random.seed(seed)
@@ -27,12 +26,10 @@ def generate_canopy_map(width=100, height=100, clustering=50, canopy_cover=0.5, 
     threshold = np.percentile(world, (1 - canopy_cover) * 100)
     return (world > threshold).astype(int)
 
-
+# Generates a canopy map by layering multiple Perlin noise fields and placing circular trees
 def generate_canopy_map_layered_noise(width=100, height=100, base_clustering=80, detail_clustering=20,
         detail_weight=0.3, density=0.6, tree_radius_range=(5, 10), seed=None):
-    """
-    Generates a canopy map by layering multiple Perlin noise fields and placing circular trees.
-    """
+
     rng = np.random.default_rng(seed)
     base_seed = int(rng.integers(0, np.iinfo(np.int32).max))
     base_noise = np.zeros((height, width))
@@ -60,20 +57,17 @@ def generate_canopy_map_layered_noise(width=100, height=100, base_clustering=80,
 
     return canopy_map
 
-
+# A simple class to hold a pre-generated canopy shape and its area
 class CanopyStamp:
-    """A simple class to hold a pre-generated canopy shape and its area."""
 
     def __init__(self, shape):
         self.shape = shape
         self.area = np.sum(shape)
         self.height, self.width = shape.shape
 
-
+# Generates a library of pre-rendered, irregular canopy shapes (stamps)
 def create_stamp_library(num_stamps, radius_range, shape_complexity, seed=None):
-    """
-    Generates a library of pre-rendered, irregular canopy shapes (stamps).
-    """
+
     print(f"Generating {num_stamps} canopy stamps for the library...")
     rng = np.random.default_rng(seed)
     base_seed = int(rng.integers(0, np.iinfo(np.int32).max))
@@ -107,12 +101,9 @@ def create_stamp_library(num_stamps, radius_range, shape_complexity, seed=None):
 
     return library
 
-
+# Generates a forest with a target canopy cover by placing pre-generated tree stamps one by one until the target is met
 def generate_forest_analytically(width, height, target_cover, stamp_library, generator_params, seed=None):
-    """
-    Generates a forest with a target canopy cover by analytically placing pre-generated
-    tree stamps one by one until the target is met.
-    """
+
     rng = np.random.default_rng(seed)
     base_seed = int(rng.integers(0, np.iinfo(np.int32).max))
 
@@ -190,8 +181,11 @@ def generate_forest_analytically(width, height, target_cover, stamp_library, gen
 
     return canopy_map
 
+#endregion
 
-# --- Visualization Example ---
+## ----------------------------------------------- VISUALIZATION EXAMPLE -----------------------------------------------
+#region
+
 if __name__ == '__main__':
     map_size = 500
     seed = 42
@@ -254,3 +248,5 @@ if __name__ == '__main__':
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
+
+#endregion
