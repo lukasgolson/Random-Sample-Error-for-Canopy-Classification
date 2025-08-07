@@ -1,3 +1,7 @@
+# Python Code Files
+**number_of_points.py**: Used to calculate the minimum number of sample points required for 95% of 10,000 trials to fall within ±2.5% of the true canopy cover. Curves are presented for 0 - 60% canopy cover in 5% canopy cover increments with canopy clustering of 0 to 100 based on the python package noise. This package forms the analysis and visual for Results paragraph 1, Figure 1, and Appendix A.
+   -> ready to run
+
 # Random-Sample-Error-for-Canopy-Classification
 A simulation of error margins in canopy classification using random sample point generation, similar to the i-Tree Canopy methods.
 
@@ -102,5 +106,4 @@ So:
 SEadjusted = √((0.4 * 0.6) / 4.98) = 0.219 &nbsp;&nbsp;&nbsp;&nbsp vs. &nbsp;&nbsp;&nbsp;&nbsp SE = √((0.4 * 0.6) / 1000) = 0.015
 </div>
 
-# Python Code Files
-**sample_size_agreement.py**: Used to calculate the minimum number of sample points required for 95% of 10,000 trials to fall within ±2.5% of the true canopy cover. Curves are presented for 0 - 60% canopy cover in 5% canopy cover increments with canopy clustering of 0 to 100 based on the python package noise. This package forms the analysis and visual for Results paragraph 1, Figure 1, and Appendix A.
+
