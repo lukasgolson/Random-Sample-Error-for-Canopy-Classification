@@ -1,43 +1,73 @@
-import math
+import numpy as np
+import matplotlib.pyplot as plt
+from canopy_model import generate_canopy_map
+from tqdm import tqdm
 
-# Input values
-N = 1000  # Total sampled points
-n = 330   # Points classified as tree
-nc = 5       # Average neighborhood (cluster) size
-rho = 0.9    # Spatial autocorrelation (e.g., Moran’s I)
+# Configuration
+width = height = 1490
+sample_points = 100
+num_trials = 10
 
-# Compute proportion and complement
-p = n / N
-q = 1 - p
+clustering_levels = range(0, 101, 5)
+canopy_covers = [0.10, 0.20, 0.30]  # 10%, 20%, 30%
 
-# Compute standard error (SE)
-if n < 10:
-    # For very small n, use simplified SE estimate (field-specific adjustment)
-    SE = math.sqrt(n) / N
-else:
-    SE = math.sqrt(p * q / N)
+results_standard = {cover: [] for cover in canopy_covers}
+results_neff = {cover: [] for cover in canopy_covers}
 
-# Confidence interval calculation (if sample size is sufficient)
-if N >= 30:
-    margin = 1.96 * SE  # 95% confidence level
-    lower_bound = max(0, p - margin)
-    upper_bound = min(1, p + margin)
-    print(f"95% Confidence Interval: {lower_bound:.1%} to {upper_bound:.1%}")
+for cover in canopy_covers:
+    for clustering in tqdm(clustering_levels, desc=f"Cover {cover*100:.0f}%"):
 
-# Output basic results
-print(f"Percent tree cover: {p:.1%}")
-print(f"Standard Error (SE): {SE:.4f}")
+        canopy_map = generate_canopy_map(width, height, clustering=clustering, canopy_cover=cover)
+        true_cover = np.mean(canopy_map)
 
-# Functions for spatially adjusted SEs
-def se_adjusted_deff(p, N, nc, rho):
-    deff = 1 + (nc - 1) * rho
-    se = math.sqrt(p * (1 - p) / N)
-    return se * math.sqrt(deff)
+        misses_standard = 0
+        misses_neff = 0
 
-def se_adjusted_neff(p, N, rho):
-    neff = N / (1 + (N - 1) * rho)
-    return math.sqrt(p * (1 - p) / neff)
+        rho = clustering / 100  # Approximate Moran's I
+        neff = sample_points / (1 + (sample_points - 1) * rho)
 
-# Output adjusted SEs
-print(f"Standard Error with Design Effect: {se_adjusted_deff(p, N, nc, rho):.4f}")
-print(f"Standard Error with Effective N:   {se_adjusted_neff(p, N, rho):.4f}")
+        for _ in range(num_trials):
+            sample_x = np.random.randint(0, width, sample_points)
+            sample_y = np.random.randint(0, height, sample_points)
+            sample_vals = canopy_map[sample_y, sample_x]
+
+            p = np.mean(sample_vals)
+
+            # Standard SE
+            se_standard = np.sqrt(p * (1 - p) / sample_points)
+            margin_standard = 1.96 * se_standard
+            lb_standard = max(0, p - margin_standard)
+            ub_standard = min(1, p + margin_standard)
+
+            if not (lb_standard <= true_cover <= ub_standard):
+                misses_standard += 1
+
+            # Neff-adjusted SE
+            se_neff = np.sqrt(p * (1 - p) / neff)
+            margin_neff = 1.96 * se_neff
+            lb_neff = max(0, p - margin_neff)
+            ub_neff = min(1, p + margin_neff)
+
+            if not (lb_neff <= true_cover <= ub_neff):
+                misses_neff += 1
+
+        results_standard[cover].append(misses_standard)
+        results_neff[cover].append(misses_neff)
+
+# Plotting
+plt.figure(figsize=(10, 7))
+
+for cover in canopy_covers:
+    label_std = f"{int(cover*100)}% Cover (Standard SE)"
+    label_neff = f"{int(cover*100)}% Cover (Neff Adjusted)"
+    plt.plot(results_standard[cover], clustering_levels, linestyle='--', marker='o', label=label_std)
+    plt.plot(results_neff[cover], clustering_levels, linestyle='-', marker='o', label=label_neff)
+
+plt.xlabel("Number of Trials Outside 95% CI", fontsize=14)
+plt.ylabel("Clustering Level", fontsize=14)
+plt.grid(True)
+plt.legend(title="Canopy Cover & Method")
+plt.tight_layout()
+plt.gca().invert_yaxis()
+plt.show()
+#endregion
