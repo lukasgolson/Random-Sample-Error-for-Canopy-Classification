@@ -2,14 +2,12 @@
 # How does the reliability of my estimate change as I increase the number of sample points?
 # Results: Paragraph 1, Figure 1
 
-# Notes
-# Each pixel represents a 30 cm x 30 cm cell
-
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import multiprocessing
 from canopy_model import generate_canopy_map
+from matplotlib.font_manager import FontProperties
 
 ## ------------------------------------------------- DEFINE SIMULATION -------------------------------------------------
 #region
