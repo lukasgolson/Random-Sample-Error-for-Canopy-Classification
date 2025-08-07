@@ -39,7 +39,7 @@ AOIS = {
 #region
 
 if __name__ == "__main__":
-    # Configuration from Define Simulation block
+    # Configuration
     canopy_cover_levels_to_test = np.arange(MIN_CANOPY_COVER, MAX_CANOPY_COVER + 1, INCREMENT_CANOPY_COVER) / 100
     sample_sizes_to_test = np.arange(MIN_SAMPLE_SIZE, MAX_SAMPLE_SIZE + 1, INCREMENT_SIZE)
 
@@ -49,58 +49,110 @@ if __name__ == "__main__":
         "AGREEMENT_TOLERANCE": agreement_tolerance,
     }
 
-    # Prepare a 1-row, 3-column figure
-    fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+    # Prepare 2x2 figure
+    fig, axes = plt.subplots(2, 2, figsize=(18, 12))
     plt.style.use('seaborn-v0_8-whitegrid')
 
-    for ax, (aoi_name, (width, height)) in zip(axes, AOIS.items()):
+    # Flatten axes for easy indexing
+    axes = axes.flatten()
+
+    # Store canopy maps to show later
+    canopy_maps_to_show = []
+
+    for i, (aoi_name, (width, height)) in enumerate(AOIS.items()):
+        ax = axes[i]
         print(f"\n\n=== Running simulations for {aoi_name} ===")
 
+        # Generate the canopy map for visualization (30% cover)
+        sample_cover = 0.3
+        canopy_map = generate_canopy_map(
+            width=width,
+            height=height,
+            clustering=65,
+            canopy_cover=sample_cover,
+            seed=42
+        )
+        canopy_maps_to_show.append((aoi_name, canopy_map))
+
+        # Run analysis and plot agreement curves
         for cover_level in tqdm(canopy_cover_levels_to_test, desc=f"{aoi_name} Progress"):
-            print(f"--- Canopy Cover: {cover_level:%} ---")
+            print(f"--- Canopy Cover: {cover_level:.0%} ---")
             sample_sizes, agreement_percents, actual_cover = analyze_sample_size_agreement(
                 CONFIG, cover_level, width, height
             )
 
-            ax.plot(sample_sizes, agreement_percents, marker='o', linestyle='-', markersize=4,
+            ax.plot(sample_sizes, agreement_percents, marker='o', linestyle='-', markersize=6,
                     label=f'{actual_cover:.1f}%')
 
-        # Finalize each subplot
         ax.axhline(y=95, color='r', linestyle='--', label='95% Target')
-        ax.set_title(aoi_name, fontsize=13, fontweight='bold')
-        ax.set_xlabel('Number of Sample Points', fontsize=11)
+        ax.set_title(aoi_name, fontsize=19, fontweight='bold')
+        ax.set_xlabel('Number of Sample Points', fontsize=17)
+        ax.set_ylabel('Agreement Within Tolerance (%)', fontsize=17)
         ax.set_ylim(0, 105)
+        ax.tick_params(axis='both', labelsize=15)
         ax.grid(False)
 
-    # Adjust bottom spacing to make room for the legend
-    plt.subplots_adjust(bottom=0.22)
+    # Remove y-axis label from top-right subplot
+    axes[1].set_ylabel('')
 
-    # Shared legend below the figure
+    # Remove unused bottom-right plot and use for legend
+    axes[3].axis('off')
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, title="Canopy Cover",
-               loc='lower center', bbox_to_anchor=(0.5, -0.05),
-               ncol=12, fontsize=10, title_fontsize=12, frameon=False)
+    bold_font = FontProperties(weight='bold', size=18)
+    legend = axes[3].legend(handles, labels, title="Canopy Cover Extent",
+                            loc='center', fontsize=16, title_fontproperties=bold_font, frameon=False)
+
+    # Adjust layout and spacing
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.25)
 
     plt.show()
 
-    # Generate and show the canopy map for this AOI
-    sample_cover = 0.3 # Use mid canopy cover (e.g., 30%) just for visualization
+    # Print standalone agreement plots for each AOI
+    for i, (aoi_name, (width, height)) in enumerate(AOIS.items()):
+        print(f"\n\n=== Re-plotting standalone figure for {aoi_name} ===")
 
-    canopy_map = generate_canopy_map(
-        width=width,
-        height=height,
-        clustering=65,
-        canopy_cover=sample_cover,
-        seed=42
-    )
+        fig_single, ax_single = plt.subplots(figsize=(8, 6))
+        sample_cover = 0.3
+        canopy_map = generate_canopy_map(
+            width=width,
+            height=height,
+            clustering=65,
+            canopy_cover=sample_cover,
+            seed=42
+        )
 
-    fig_map, ax_map = plt.subplots(figsize=(6, 6))
-    ax_map.imshow(canopy_map, cmap='Greens', interpolation='nearest')
-    ax_map.set_title(f"{aoi_name} Canopy Map (30% Cover)", fontsize=13)
-    ax_map.set_xticks([])
-    ax_map.set_yticks([])
+        for cover_level in canopy_cover_levels_to_test:
+            sample_sizes, agreement_percents, actual_cover = analyze_sample_size_agreement(
+                CONFIG, cover_level, width, height
+            )
+            ax_single.plot(sample_sizes, agreement_percents, marker='o', linestyle='-', markersize=6,
+                           label=f'{actual_cover:.1f}%')
 
-    plt.tight_layout()
-    plt.show()
+        ax_single.axhline(y=95, color='r', linestyle='--', label='95% Target')
+        ax_single.set_title(aoi_name, fontsize=17, fontweight='bold')
+        ax_single.set_xlabel('Number of Sample Points', fontsize=15)
+        ax_single.set_ylabel('Agreement Within Tolerance (%)', fontsize=15)
+        ax_single.set_ylim(0, 105)
+        ax_single.tick_params(axis='both', labelsize=13)
+        ax_single.grid(False)
+
+        bold_font = FontProperties(weight='bold', size=16)
+        ax_single.legend(title="Canopy Cover Extent", loc='center left',
+                         bbox_to_anchor=(1.05, 0.5), fontsize=14,
+                         title_fontproperties=bold_font, frameon=False)
+
+        fig_single.tight_layout()
+        plt.show()
+
+    # Show each stored canopy map
+    for aoi_name, canopy_map in canopy_maps_to_show:
+        fig_map, ax_map = plt.subplots(figsize=(6, 6))
+        ax_map.imshow(canopy_map, cmap='Greens', interpolation='nearest')
+        ax_map.set_title(f"{aoi_name} Canopy Map (30% Cover)", fontsize=17)
+        ax_map.set_xticks([])
+        ax_map.set_yticks([])
+        plt.tight_layout()
+        plt.show()
 
 #endregion
