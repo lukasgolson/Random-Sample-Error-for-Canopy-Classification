@@ -28,56 +28,14 @@ agreement_tolerance = 2.5 # Proximity to true canopy cover considered acceptable
 
 # AOI definitions (in pixels, assuming 30 cm resolution)
 AOIS = {
-    "Neighbourhood": (14907, 14907), # Neighbourhood (20 km²) AOI
-    "City": (66667, 66667), # City (400 km²) AOI
-    "Region": (182574, 182574), # Region / County (3,000 km²) AOI
+    "Neighbourhood (20 km²)": (14907, 14907), # Neighbourhood (20 km²) AOI
+    "City (400 km²)": (66667, 66667), # City (400 km²) AOI
+    "Region (3,000 km²)": (182574, 182574), # Region / County (3,000 km²) AOI
 }
 
 #endregion
 
 ## -------------------------------------------------- DEFINE FUNCTIONS -------------------------------------------------
-#region
-
-# Performs a random sample run and returns the single estimated cover
-def get_single_estimate(canopy_map, num_samples):
-
-    # Handle edge case where a map has 0% cover to avoid divide-by-zero if num_samples is 0
-    if num_samples == 0:
-        return 0
-    height, width = canopy_map.shape
-    sample_x = np.random.randint(0, width, num_samples)
-    sample_y = np.random.randint(0, height, num_samples)
-    canopy_hits = np.sum(canopy_map[sample_y, sample_x])
-    return (canopy_hits / num_samples) * 100
-
-#  Analyzes the relationship between sample size and agreement for a given canopy cover
-def analyze_sample_size_agreement(config, target_canopy_cover, width, height):
-
-    sample_sizes = config['SAMPLE_SIZES_TO_TEST']
-    num_trials = config['NUM_TRIALS_PER_SIZE']
-    tolerance = config['AGREEMENT_TOLERANCE']
-
-    # Generate a representative map with the specified target canopy cover
-    canopy_map = generate_canopy_map(
-        width=width, height=height, clustering=65, canopy_cover=target_canopy_cover, seed=42
-    )
-
-    true_cover = np.mean(canopy_map) * 100
-
-    agreement_results = []
-
-    with multiprocessing.Pool(processes=4) as pool:
-        for n_samples in sample_sizes:
-            task_args = [(canopy_map, n_samples)] * num_trials
-            estimates = pool.starmap(get_single_estimate, task_args)
-
-            in_agreement_count = np.sum(np.abs(np.array(estimates) - true_cover) <= tolerance)
-            agreement_percent = (in_agreement_count / num_trials) * 100
-            agreement_results.append(agreement_percent)
-
-    return sample_sizes, agreement_results, true_cover
-
-## -------------------------------- MAIN EXECUTION: Run Sample Size Reliability Analysis -------------------------------
 #region
 
 if __name__ == "__main__":
@@ -92,7 +50,7 @@ if __name__ == "__main__":
     }
 
     # Prepare a 1-row, 3-column figure
-    fig, axes = plt.subplots(1, 3, figsize=(20, 6), constrained_layout=True)
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6))
     plt.style.use('seaborn-v0_8-whitegrid')
 
     for ax, (aoi_name, (width, height)) in zip(axes, AOIS.items()):
@@ -114,12 +72,14 @@ if __name__ == "__main__":
         ax.set_ylim(0, 105)
         ax.grid(False)
 
-    # Set shared y-axis label
-    axes[0].set_ylabel(f'Proportion of Estimates within ±{CONFIG["AGREEMENT_TOLERANCE"]}% of True Canopy Cover', fontsize=11)
+    # Adjust space to make room for legend
+    plt.subplots_adjust(top=0.80)  # Allows space above plots
 
-    # Add a single legend for all plots
+    # Shared legend above
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, title="True Cover", loc='upper center', ncol=len(labels), frameon=False)
+    fig.legend(handles, labels, title="True Canopy Cover",
+               loc='upper center', bbox_to_anchor=(0.5, 0.98),
+               ncol=7, fontsize=9, title_fontsize=10, frameon=False)
 
     plt.show()
 
