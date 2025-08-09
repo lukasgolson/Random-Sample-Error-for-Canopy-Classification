@@ -203,7 +203,7 @@ if __name__ == '__main__':
     target_canopy_percentage = 0.4
 
     forest_style_params = {
-        "base_clustering":  240,
+        "base_clustering":  120,
         "radius_range":     (5, 50),
         "shape_complexity": 15
     }
