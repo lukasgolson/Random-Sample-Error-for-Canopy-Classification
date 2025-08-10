@@ -200,12 +200,12 @@ def generate_forest_analytically(width, height, target_cover, stamp_library, gen
 if __name__ == '__main__':
     map_size = 500
     seed = 42
-    target_canopy_percentage = 0.4
+    target_canopy_percentage = 0.1
 
     forest_style_params = {
-        "base_clustering":  120,
-        "radius_range":     (5, 50),
-        "shape_complexity": 15
+        "base_clustering":  60,
+        "radius_range":     (10, 25),
+        "shape_complexity": 5
     }
     stamp_library_params = {
         "num_stamps":       300,
