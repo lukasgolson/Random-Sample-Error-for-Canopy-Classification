@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from canopy_model import generate_canopy_map
-from tqdm import tqdm
 
 # Configuration
 width = height = 1490
@@ -15,7 +14,7 @@ results_standard = {cover: [] for cover in canopy_covers}
 results_neff = {cover: [] for cover in canopy_covers}
 
 for cover in canopy_covers:
-    for clustering in tqdm(clustering_levels, desc=f"Cover {cover*100:.0f}%"):
+    for clustering in clustering_levels:
 
         canopy_map = generate_canopy_map(width, height, clustering=clustering, canopy_cover=cover)
         true_cover = np.mean(canopy_map)

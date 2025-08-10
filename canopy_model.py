@@ -1,7 +1,6 @@
 import numpy as np
 import noise
 from matplotlib import pyplot as plt
-from tqdm import tqdm
 
 
 def generate_canopy_map(width=100, height=100, clustering=50, canopy_cover=0.5, seed=None):
@@ -118,7 +117,7 @@ def run_simulation_and_plot():
     simulation_seed = 42
 
     # Loop through each clustering value with a progress bar
-    for cluster_val in tqdm(clustering_values, desc="Calculating Moran's I"):
+    for cluster_val in clustering_values:
         # Generate the map. Note: clustering=0 is a special case.
         # For clustering > 0, we need to handle potential division by zero.
         if cluster_val > 0:
@@ -202,5 +201,5 @@ def run_simulation_and_plot():
 if __name__ == '__main__':
     # To run the analysis, simply execute this script.
     # Make sure you have the required libraries installed:
-    # pip install numpy noise matplotlib tqdm
+    # pip install numpy noise matplotlib
     run_simulation_and_plot()

@@ -4,7 +4,6 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 import multiprocessing
 from canopy_model import generate_canopy_map
 from matplotlib.font_manager import FontProperties
@@ -118,7 +117,7 @@ if __name__ == "__main__":
         canopy_maps_to_show.append((aoi_name, canopy_map))
 
         # Run analysis and plot agreement curves
-        for cover_level in tqdm(canopy_cover_levels_to_test, desc=f"{aoi_name} Progress"):
+        for cover_level in canopy_cover_levels_to_test:
             print(f"--- Canopy Cover: {cover_level:.0%} ---")
             sample_sizes, agreement_percents, actual_cover = analyze_sample_size_agreement(
                 CONFIG, cover_level, width, height

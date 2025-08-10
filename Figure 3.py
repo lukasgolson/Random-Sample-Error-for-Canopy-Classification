@@ -8,7 +8,6 @@
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 import multiprocessing
 
 # --- Assuming these functions are in their respective files ---
@@ -63,7 +62,7 @@ def calculate_se_adjusted(p, n_samples, morans_i):
 
     # Calculate adjusted SE using the effective sample size
     value = p * (1 - p) / n_effective
-    return math.sqrt(max(0, value))
+    return math.sqrt(max(0.0, value))
 
 
 # --- Simulation Runner ---
@@ -81,7 +80,7 @@ def run_simulation_for_aoi(aoi_config):
 
     results = []
 
-    for cluster_val in tqdm(clustering_levels, desc=f"Simulating {aoi_name}"):
+    for cluster_val in clustering_levels:
         # Store metrics for each run at this clustering level to average later
         run_morans_i = []
         run_se = []

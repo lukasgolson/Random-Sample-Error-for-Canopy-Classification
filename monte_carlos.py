@@ -7,7 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from canopy_model import generate_canopy_map
 import multiprocessing
-from tqdm import tqdm
 
 from canopy_sampling import calculate_direct_cover, simulate_random_sampling
 
@@ -74,7 +73,7 @@ if __name__ == "__main__":
 
     # --- 1. Run all simulations first to gather data ---
     print("Step 1: Running all simulations to gather data...")
-    for cluster_level in tqdm(clustering_levels_to_test, desc="Analyzing Clustering Levels"):
+    for cluster_level in clustering_levels_to_test:
         CONFIG['CLUSTERING'] = cluster_level
         true_dist, estimated_dist = run_monte_carlo(CONFIG)
         all_results.append({

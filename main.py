@@ -1,7 +1,6 @@
 import noise
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 import multiprocessing
 
 ## -------------------------------------------------- DEFINE FUNCTIONS -------------------------------------------------
@@ -140,7 +139,7 @@ def run_simulation_and_plot():
     simulation_seed = 42
 
     # Loop through each clustering value with a progress bar
-    for cluster_val in tqdm(clustering_values, desc="Calculating Moran's I"):
+    for cluster_val in clustering_values:
         # Generate the map. Note: clustering=0 is a special case.
         # For clustering > 0, we need to handle potential division by zero.
         if cluster_val > 0:
@@ -380,7 +379,7 @@ if __name__ == "__main__":
 
     # --- 1. Run all simulations first to gather data ---
     print("Step 1: Running all simulations to gather data...")
-    for cluster_level in tqdm(clustering_levels_to_test, desc="Analyzing Clustering Levels"):
+    for cluster_level in clustering_levels_to_test:
         CONFIG['CLUSTERING'] = cluster_level
         true_dist, estimated_dist = run_monte_carlo(CONFIG)
         all_results.append({
@@ -461,7 +460,7 @@ if __name__ == "__main__":
     # --- Run Analysis for Each Canopy Cover Level ---
     canopy_cover_levels_to_test = np.arange(0, 41, 5) / 100.0  # 0% to 40%
 
-    for cover_level in tqdm(canopy_cover_levels_to_test, desc="Overall Progress"):
+    for cover_level in canopy_cover_levels_to_test:
         print(f"\n--- Running analysis for Canopy Cover: {cover_level:.0%} ---")
 
         sample_sizes, agreement_percents, actual_cover = analyze_sample_size_agreement(CONFIG, cover_level)
