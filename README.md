@@ -2,6 +2,17 @@
 **number_of_points.py**: Used to calculate the minimum number of sample points required for 95% of 10,000 trials to fall within ±2.5% of the true canopy cover. Curves are presented for 0 - 60% canopy cover in 5% canopy cover increments with canopy clustering of 0 to 100 based on the python package noise. This package forms the analysis and visual for Results paragraph 1, Figure 1, and Appendix A.
    -> ready to run
 
+# Required Python Packages
+numpy
+noise
+matplotlib
+tqdm
+multiprocessing
+opensimplex
+numba
+skimage
+random
+
 # Random-Sample-Error-for-Canopy-Classification
 A simulation of error margins in canopy classification using random sample point generation, similar to the i-Tree Canopy methods.
 
