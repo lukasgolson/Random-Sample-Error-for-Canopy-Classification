@@ -4,9 +4,10 @@
 # 3. Apply 100,000 random sample points (same points for all runs) and identify as canopy (1) or no canopy (0). Include meters x and y of sample points (in replace of latitude and longitude)
 # 4. Export results as CSV with columns Sample Point ID, Sample Point X Location, Sample Point Y Location, then columns with code {AOI}_{Target_Extent}_{Target_Moran}_{True_Extent}_{True_Moran}. 
 
-## ----------------------------------------- IMPORT PACKAGES -----------------------------------------
+## ----------------------------------------- 0. IMPORT PACKAGES, SETTINGS -----------------------------------------
 #region
 
+# packages
 import os
 import random
 import multiprocessing
@@ -26,27 +27,14 @@ import numba
 import noise
 import opensimplex
 
+# Settings
+
 #endregion
 
-
-
-
-
-# Defining the column titles for the CSV
-AOI = AOI in AOIs
-Target_Extent = canopy_extent
-
-True_Extent = np.mean(canopy_map) * 100 # The mean of a binary (0/1) array is the proportion of 1s
-
-
-exit() # Safety stop
-## EVERYTHING BELOW HERE IS COPIED FROM OTHER DRAFTS
+## ----------------------------------------- 1. CREATE A TREE STAMP -----------------------------------------
+#region
 
 # Tree generator
-
-
-
-
 def _generate_fast_noise(width, height, scale, seed, octaves, persistence, lacunarity):
     world = np.empty((height, width), dtype=np.float64)
 
@@ -179,7 +167,11 @@ def create_stamp_library(num_stamps, radius_range, shape_complexity, seed=None):
         canopy_shape = (shaped_noise > 0.4).astype(np.int8)
         library.append(CanopyStamp(canopy_shape))
     return library
+    
+#endregion
 
+## ----------------------------------------- 2. GENERATE AN AOI, CANOPY EXTENT, AND MORAN'S I -----------------------------------------
+#region
 
 def generate_forest_analytically(width, height, target_cover, stamp_library, generator_params, seed=None):
     """
@@ -234,67 +226,6 @@ def generate_forest_analytically(width, height, target_cover, stamp_library, gen
     else:
         print(f"Warning: Ran out of locations. Final cover: {np.mean(canopy_map):.2%}")
     return canopy_map
-
-
-# --- Visualization Example ---
-if __name__ == '__main__':
-    map_size = 500
-    seed = 42
-    target_canopy_percentage = 0.1
-
-    forest_style_params = {
-        "base_clustering":  60,
-        "radius_range":     (10, 25),
-        "shape_complexity": 5
-    }
-    stamp_library_params = {
-        "num_stamps":       300,
-        "radius_range":     forest_style_params["radius_range"],
-        "shape_complexity": forest_style_params["shape_complexity"]
-    }
-
-    # --- Generate the stamp library first ---
-    stamp_library = create_stamp_library(**stamp_library_params, seed=seed)
-
-    # --- Generate Maps using the new, safe functions ---
-    blob_map = generate_canopy_map_fast(
-        width=map_size, height=map_size, clustering=80, canopy_cover=target_canopy_percentage, seed=seed
-    )
-    circular_trees_map = generate_canopy_map_layered_noise(
-        width=map_size, height=map_size, base_clustering=120, detail_clustering=30,
-        detail_weight=0.4, density=0.55, tree_radius_range=(8, 15), seed=seed
-    )
-    irregular_trees_map = generate_forest_analytically(
-        width=map_size, height=map_size,
-        target_cover=target_canopy_percentage,
-        stamp_library=stamp_library,
-        generator_params=forest_style_params,
-        seed=seed
-    )
-
-    # --- Plotting ---
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-    fig.suptitle("Comparison of Canopy Generation Methods (using OpenSimplex)", fontsize=16, fontweight='bold')
-
-    axes[0].imshow(blob_map, cmap='Greens', interpolation='nearest')
-    axes[0].set_title(f"Fast Blob Method\nCover: {np.mean(blob_map):.2%}", fontsize=12)
-
-    axes[1].imshow(circular_trees_map, cmap='Greens', interpolation='nearest')
-    axes[1].set_title(f"Circular Trees Method\nCover: {np.mean(circular_trees_map):.2%}", fontsize=12)
-
-    axes[2].imshow(irregular_trees_map, cmap='Greens', interpolation='nearest')
-    axes[2].set_title(f"Stamp Library Method\nCover: {np.mean(irregular_trees_map):.2%}", fontsize=12)
-
-    for ax in axes:
-        ax.set_xticks([])
-        ax.set_yticks([])
-
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.show()
-
-# Canopy_models
-
-
 
 def generate_canopy_map(width=100, height=100, clustering=50, canopy_cover=0.5, seed=None):
     """
@@ -489,6 +420,99 @@ def run_simulation_and_plot():
     fig.suptitle("Example Canopy Maps", fontsize=16, fontweight='bold')
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
+
+
+#endregion
+
+## ----------------------------------------- 3. APPLY RANDOM SAMPLES -----------------------------------------
+#region
+
+
+#endregion
+
+## ----------------------------------------- 4. EXPORT RESULTS AS CSV -----------------------------------------
+# region
+
+# Defining the column titles for the CSV
+AOI = AOI in AOIs
+Target_Extent = canopy_extent
+
+True_Extent = np.mean(canopy_map) * 100 # The mean of a binary (0/1) array is the proportion of 1s
+
+#endregion
+
+
+
+exit() # Safety stop
+
+## EVERYTHING BELOW HERE IS COPIED FROM OTHER DRAFTS
+
+
+
+
+
+
+
+# --- Visualization Example ---
+if __name__ == '__main__':
+    map_size = 500
+    seed = 42
+    target_canopy_percentage = 0.1
+
+    forest_style_params = {
+        "base_clustering":  60,
+        "radius_range":     (10, 25),
+        "shape_complexity": 5
+    }
+    stamp_library_params = {
+        "num_stamps":       300,
+        "radius_range":     forest_style_params["radius_range"],
+        "shape_complexity": forest_style_params["shape_complexity"]
+    }
+
+    # --- Generate the stamp library first ---
+    stamp_library = create_stamp_library(**stamp_library_params, seed=seed)
+
+    # --- Generate Maps using the new, safe functions ---
+    blob_map = generate_canopy_map_fast(
+        width=map_size, height=map_size, clustering=80, canopy_cover=target_canopy_percentage, seed=seed
+    )
+    circular_trees_map = generate_canopy_map_layered_noise(
+        width=map_size, height=map_size, base_clustering=120, detail_clustering=30,
+        detail_weight=0.4, density=0.55, tree_radius_range=(8, 15), seed=seed
+    )
+    irregular_trees_map = generate_forest_analytically(
+        width=map_size, height=map_size,
+        target_cover=target_canopy_percentage,
+        stamp_library=stamp_library,
+        generator_params=forest_style_params,
+        seed=seed
+    )
+
+    # --- Plotting ---
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig.suptitle("Comparison of Canopy Generation Methods (using OpenSimplex)", fontsize=16, fontweight='bold')
+
+    axes[0].imshow(blob_map, cmap='Greens', interpolation='nearest')
+    axes[0].set_title(f"Fast Blob Method\nCover: {np.mean(blob_map):.2%}", fontsize=12)
+
+    axes[1].imshow(circular_trees_map, cmap='Greens', interpolation='nearest')
+    axes[1].set_title(f"Circular Trees Method\nCover: {np.mean(circular_trees_map):.2%}", fontsize=12)
+
+    axes[2].imshow(irregular_trees_map, cmap='Greens', interpolation='nearest')
+    axes[2].set_title(f"Stamp Library Method\nCover: {np.mean(irregular_trees_map):.2%}", fontsize=12)
+
+    for ax in axes:
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.show()
+
+# Canopy_models
+
+
+
 
 
 if __name__ == '__main__':
