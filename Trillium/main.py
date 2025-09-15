@@ -5,6 +5,17 @@
 # 4. Export results as CSV with columns Sample Point ID, Sample Point X Location, Sample Point Y Location, then columns with code {AOI}_{Target_Extent}_{Target_Moran}_{True_Extent}_{True_Moran}. 
 
 
+# Defining the column titles for the CSV
+AOI = AOI in AOIs
+Target_Extent = canopy_extent
+
+True_Extent = np.mean(canopy_map) * 100 # The mean of a binary (0/1) array is the proportion of 1s
+
+
+exit() # Safety stop
+## EVERYTHING BELOW HERE IS COPIED FROM OTHER DRAFTS
+
+
 # This script answers the question:
 # How does the reliability of my estimate change as I increase the number of sample points?
 # Results: Paragraph 1, Figure 1
@@ -191,11 +202,7 @@ if __name__ == "__main__":
 import numpy as np
 
 
-def calculate_direct_cover(canopy_map):
 
-    # The mean of a binary (0/1) array is the proportion of 1s.
-    true_proportion = np.mean(canopy_map)
-    return true_proportion * 100
 
 
 def simulate_random_sampling(canopy_map, num_samples, with_coordinates=False):
