@@ -4,6 +4,33 @@
 # 3. Apply 100,000 random sample points (same points for all runs) and identify as canopy (1) or no canopy (0). Include meters x and y of sample points (in replace of latitude and longitude)
 # 4. Export results as CSV with columns Sample Point ID, Sample Point X Location, Sample Point Y Location, then columns with code {AOI}_{Target_Extent}_{Target_Moran}_{True_Extent}_{True_Moran}. 
 
+## ----------------------------------------- IMPORT PACKAGES -----------------------------------------
+#region
+
+import os
+import random
+import multiprocessing
+from multiprocessing import Pool
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.font_manager import FontProperties
+import geopandas as gpd
+import rasterio
+from rasterio.mask import mask
+from rasterio.features import shapes
+from shapely.geometry import shape
+from skimage.feature import peak_local_max
+from tqdm import tqdm
+import numba
+import noise
+import opensimplex
+
+#endregion
+
+
+
+
 
 # Defining the column titles for the CSV
 AOI = AOI in AOIs
@@ -16,12 +43,7 @@ exit() # Safety stop
 ## EVERYTHING BELOW HERE IS COPIED FROM OTHER DRAFTS
 
 # Tree generator
-import opensimplex
-import numpy as np
-import matplotlib.pyplot as plt
-import numba
-from skimage.feature import peak_local_max
-import random
+
 
 
 
@@ -271,9 +293,7 @@ if __name__ == '__main__':
     plt.show()
 
 # Canopy_models
-import numpy as np
-import noise
-from matplotlib import pyplot as plt
+
 
 
 def generate_canopy_map(width=100, height=100, clustering=50, canopy_cover=0.5, seed=None):
@@ -477,16 +497,7 @@ if __name__ == '__main__':
     # pip install numpy noise matplotlib
     run_simulation_and_plot()
 
-import os
-import numpy as np
-import geopandas as gpd
-import rasterio
-from rasterio.mask import mask
-from rasterio.features import shapes
-from shapely.geometry import shape
-from multiprocessing import Pool
-import pandas as pd
-from tqdm import tqdm
+
 
 # Constants
 N_CPUS = 192
@@ -558,7 +569,6 @@ def compute_clumpy(binary_array):
     Compute CLUMPY index from a 2D binary array (1=canopy, 0=no canopy)
     Using adjacency counts: like adjacencies / expected like adjacencies
     """
-    import numpy as np
 
     # 4-neighbor adjacency
     arr = binary_array
@@ -764,12 +774,7 @@ def main():
 if __name__ == "__main__":
     main()
 
-import opensimplex
-import numpy as np
-import matplotlib.pyplot as plt
-import numba
-from skimage.feature import peak_local_max
-import random
+
 
 
 
@@ -1023,11 +1028,7 @@ if __name__ == '__main__':
 # How does the reliability of my estimate change as I increase the number of sample points?
 # Results: Paragraph 1, Figure 1
 
-import numpy as np
-import matplotlib.pyplot as plt
-import multiprocessing
-from canopy_model import generate_canopy_map
-from matplotlib.font_manager import FontProperties
+
 
 ## ------------------------------------------------- DEFINE SIMULATION -------------------------------------------------
 #region
@@ -1202,12 +1203,6 @@ if __name__ == "__main__":
 #endregion
 
 # Canopy Sampling
-import numpy as np
-
-
-
-
-
 def simulate_random_sampling(canopy_map, num_samples, with_coordinates=False):
     height, width = canopy_map.shape
 
