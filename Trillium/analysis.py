@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # Import the csv
 df = pd.read_csv('sample_points.csv')
 
-def_calculations
+def calculations():
   # Error calculations
   se_standard = np.sqrt(p * (1 - p) / sample_points) # Standard (i-Tree) SE calculation
   se_neff = np.sqrt(p * (1 - p) / neff) # N effective (Moran's i) SE calculation

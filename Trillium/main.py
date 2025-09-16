@@ -1,14 +1,16 @@
-import numpy as np
-import pandas as pd
-import nlmpy
-from pysal.lib import weights
-from pysal.explore import esda
-from scipy.optimize import minimize_scalar
-import matplotlib.pyplot as plt
-import seaborn as sns
-from itertools import product
 import time
 import warnings
+from itertools import product
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from pysal.explore import esda
+from pysal.lib import weights
+from scipy.optimize import minimize_scalar
+
+from nlmpy import nlmpy
+
 warnings.filterwarnings('ignore')
 
 class NeutralLandscapeGenerator:
@@ -274,7 +276,7 @@ class NeutralLandscapeGenerator:
         except Exception as e:
             print(f"Error in optimization: {e}")
             # Return fallback landscape if optimization fails
-            fallback = nlmpy.random(nrows, ncols)
+            fallback = np.random(nrows, ncols)
             threshold = np.percentile(fallback, (1-canopy_percent)*100)
             fallback_binary = (fallback > threshold).astype(int)
             fallback_morans = self.calculate_morans_i(fallback_binary)
@@ -668,5 +670,4 @@ if __name__ == "__main__":
     print("\nGenerating summary plots...")
     generator.plot_results_summary(results_df)
     
-    # Save detailed results
-    results_df_export = results_df.
+
