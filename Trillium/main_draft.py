@@ -306,11 +306,31 @@ class NeutralLandscapeGenerator:
         moran = esda.Moran(binary_landscape.flatten(), w)
         return moran.I
     
+    def select_optimal_algorithm(self, target_morans_i):
+        """
+        Select the best algorithm based on target Moran's I value
+        
+        Parameters:
+        -----------
+        target_morans_i : float
+            Target Moran's I value
+            
+        Returns:
+        --------
+        str : Optimal algorithm name
+        """
+        if target_morans_i < 0.2:
+            return 'random'  # For low/negative autocorrelation
+        elif target_morans_i > 0.8:
+            return 'randomClusterNN'  # For high clustering
+        else:
+            return 'mpd'  # For moderate autocorrelation
+    
     def generate_landscape_with_target_morans(self, nrows, ncols, canopy_percent, 
-                                            target_morans_i, algorithm='mpd', 
+                                            target_morans_i, algorithm=None, 
                                             tolerance=0.05, max_iterations=50):
         """
-        Generate landscape with target Moran's I value
+        Generate landscape with target Moran's I value using optimal algorithm selection
         
         Parameters:
         -----------
@@ -320,8 +340,8 @@ class NeutralLandscapeGenerator:
             Proportion of landscape that should be canopy (0-1)
         target_morans_i : float
             Target Moran's I value (-1 to 1)
-        algorithm : str
-            'mpd' or 'randomClusterNN'
+        algorithm : str, optional
+            Algorithm to use ('mpd', 'randomClusterNN', 'random'). If None, auto-selects optimal algorithm
         tolerance : float
             Acceptable difference from target Moran's I
         max_iterations : int
@@ -332,6 +352,11 @@ class NeutralLandscapeGenerator:
         dict : Results including landscape, achieved Moran's I, and parameters
         """
         
+        # Auto-select algorithm if not specified
+        if algorithm is None:
+            algorithm = self.select_optimal_algorithm(target_morans_i)
+            print(f"  Auto-selected algorithm: {algorithm} for target Moran's I = {target_morans_i:.2f}")
+        
         def objective_function(param):
             """Objective function to minimize difference from target Moran's I"""
             try:
@@ -341,6 +366,12 @@ class NeutralLandscapeGenerator:
                 elif algorithm == 'randomClusterNN':
                     # Random cluster NN - param is p (proportion of cluster seeds)
                     landscape = nlmpy.randomClusterNN(nrows, ncols, p=param, n=4)
+                elif algorithm == 'random':
+                    # Pure random landscape - param controls smoothing level
+                    landscape = nlmpy.random(nrows, ncols)
+                    if param > 0.1:  # Apply minimal smoothing if needed
+                        from scipy import ndimage
+                        landscape = ndimage.gaussian_filter(landscape, sigma=param)
                 else:
                     raise ValueError(f"Unknown algorithm: {algorithm}")
                 
@@ -358,15 +389,50 @@ class NeutralLandscapeGenerator:
                 # Return large penalty if generation fails
                 return 999.0
         
+        # Set algorithm-specific parameter bounds and optimization strategy
+        if algorithm == 'random':
+            # For random landscapes, try direct generation first
+            try:
+                landscape = nlmpy.random(nrows, ncols)
+                threshold = np.percentile(landscape, (1-canopy_percent)*100)
+                binary_landscape = (landscape > threshold).astype(int)
+                achieved_morans_i = self.calculate_morans_i(binary_landscape)
+                
+                # If close enough, use as-is
+                if abs(achieved_morans_i - target_morans_i) <= tolerance:
+                    return {
+                        'landscape': binary_landscape,
+                        'continuous_landscape': landscape,
+                        'target_morans_i': target_morans_i,
+                        'achieved_morans_i': achieved_morans_i,
+                        'difference': abs(achieved_morans_i - target_morans_i),
+                        'optimal_parameter': 0.0,
+                        'algorithm': algorithm,
+                        'success': True
+                    }
+                
+                # If not close enough, try optimization with smoothing
+                bounds = (0.0, 2.0)  # Smoothing parameter
+                
+            except Exception:
+                bounds = (0.0, 2.0)
+        elif algorithm == 'mpd':
+            # Adjust bounds based on target Moran's I
+            if target_morans_i < 0.3:
+                bounds = (0.7, 0.99)  # High roughness for low autocorrelation
+            elif target_morans_i > 0.7:
+                bounds = (0.01, 0.3)  # Low roughness for high autocorrelation
+            else:
+                bounds = (0.01, 0.99)  # Full range for moderate autocorrelation
+        else:  # randomClusterNN
+            # Adjust bounds based on target Moran's I
+            if target_morans_i > 0.7:
+                bounds = (0.3, 0.8)  # High clustering
+            else:
+                bounds = (0.01, 0.5)  # Moderate clustering
+        
         # Optimize parameter to achieve target Moran's I
         try:
-            if algorithm == 'mpd':
-                # h parameter bounds for midpoint displacement
-                bounds = (0.01, 0.99)
-            else:
-                # p parameter bounds for random cluster
-                bounds = (0.01, 0.8)
-                
             result = minimize_scalar(objective_function, bounds=bounds, 
                                    method='bounded', options={'maxiter': max_iterations})
             
@@ -375,8 +441,13 @@ class NeutralLandscapeGenerator:
             # Generate final landscape with optimal parameter
             if algorithm == 'mpd':
                 final_continuous = nlmpy.mpd(nrows, ncols, h=optimal_param)
-            else:
+            elif algorithm == 'randomClusterNN':
                 final_continuous = nlmpy.randomClusterNN(nrows, ncols, p=optimal_param, n=4)
+            elif algorithm == 'random':
+                final_continuous = nlmpy.random(nrows, ncols)
+                if optimal_param > 0.1:
+                    from scipy import ndimage
+                    final_continuous = ndimage.gaussian_filter(final_continuous, sigma=optimal_param)
             
             # Convert to binary
             threshold = np.percentile(final_continuous, (1-canopy_percent)*100)
@@ -398,7 +469,24 @@ class NeutralLandscapeGenerator:
             
         except Exception as e:
             print(f"Error in optimization: {e}")
-            # Return fallback landscape if optimization fails
+            # Multi-algorithm fallback strategy
+            fallback_algorithms = ['random', 'mpd', 'randomClusterNN']
+            fallback_algorithms = [alg for alg in fallback_algorithms if alg != algorithm]  # Remove current algorithm
+            
+            for fallback_alg in fallback_algorithms:
+                try:
+                    print(f"  Trying fallback algorithm: {fallback_alg}")
+                    fallback_result = self.generate_landscape_with_target_morans(
+                        nrows, ncols, canopy_percent, target_morans_i, 
+                        algorithm=fallback_alg, tolerance=tolerance*2, max_iterations=max_iterations//2
+                    )
+                    fallback_result['algorithm'] = f"{algorithm}_fallback_{fallback_alg}"
+                    return fallback_result
+                except Exception:
+                    continue
+            
+            # Final fallback to pure random if all else fails
+            print("  Using final random fallback")
             fallback = nlmpy.random(nrows, ncols)
             threshold = np.percentile(fallback, (1-canopy_percent)*100)
             fallback_binary = (fallback > threshold).astype(int)
@@ -411,12 +499,12 @@ class NeutralLandscapeGenerator:
                 'achieved_morans_i': fallback_morans,
                 'difference': abs(fallback_morans - target_morans_i),
                 'optimal_parameter': None,
-                'algorithm': 'random_fallback',
+                'algorithm': 'final_random_fallback',
                 'success': False
             }
     
     def run_parameter_sweep(self, aoi_values, canopy_extents, morans_i_values, 
-                          algorithm='mpd', n_replicates=1, save_landscapes=False):
+                          algorithm=None, n_replicates=1, save_landscapes=False):
         """
         Run complete parameter sweep across all combinations
         
@@ -428,8 +516,8 @@ class NeutralLandscapeGenerator:
             Canopy coverage proportions [0.2, 0.4, 0.6, 0.8]
         morans_i_values : list
             Target Moran's I values [-0.5, 0, 0.5]
-        algorithm : str
-            Algorithm to use ('mpd' or 'randomClusterNN')
+        algorithm : str, optional
+            Algorithm to use ('mpd', 'randomClusterNN', 'random'). If None, auto-selects optimal algorithm for each target
         n_replicates : int
             Number of replicates per parameter combination
         save_landscapes : bool
@@ -440,7 +528,15 @@ class NeutralLandscapeGenerator:
         pd.DataFrame : Results summary
         """
         
-        print(f"Starting parameter sweep with {algorithm} algorithm...")
+        
+        if algorithm is None:
+            print(f"Starting parameter sweep with AUTO-SELECTED algorithms...")
+            print(f"Algorithm selection strategy:")
+            print(f"  Moran's I < 0.2: 'random' algorithm")
+            print(f"  Moran's I 0.2-0.8: 'mpd' algorithm") 
+            print(f"  Moran's I > 0.8: 'randomClusterNN' algorithm")
+        else:
+            print(f"Starting parameter sweep with {algorithm} algorithm...")
         print(f"AOI values: {aoi_values}")
         print(f"Canopy extents: {canopy_extents}")
         print(f"Moran's I values: {morans_i_values}")
