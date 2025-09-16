@@ -328,7 +328,7 @@ class NeutralLandscapeGenerator:
     
     def generate_landscape_with_target_morans(self, nrows, ncols, canopy_percent, 
                                             target_morans_i, algorithm=None, 
-                                            tolerance=0.05, max_iterations=50):
+                                            morans_tolerance=0.025, canopy_tolerance=0.001, max_iterations=50):
         """
         Generate landscape with target Moran's I value using optimal algorithm selection
         
@@ -342,8 +342,10 @@ class NeutralLandscapeGenerator:
             Target Moran's I value (-1 to 1)
         algorithm : str, optional
             Algorithm to use ('mpd', 'randomClusterNN', 'random'). If None, auto-selects optimal algorithm
-        tolerance : float
-            Acceptable difference from target Moran's I
+        morans_tolerance : float
+            Acceptable difference from target Moran's I (default=0.025)
+        canopy_tolerance : float
+            Acceptable difference from target canopy extent (default=0.001 = 0.1%)
         max_iterations : int
             Maximum optimization iterations
             
@@ -399,7 +401,8 @@ class NeutralLandscapeGenerator:
                 achieved_morans_i = self.calculate_morans_i(binary_landscape)
                 
                 # If close enough, use as-is
-                if abs(achieved_morans_i - target_morans_i) <= tolerance:
+                success, actual_canopy = check_success(binary_landscape, achieved_morans_i, target_morans_i, canopy_percent)
+                if success:
                     return {
                         'landscape': binary_landscape,
                         'continuous_landscape': landscape,
@@ -456,15 +459,23 @@ class NeutralLandscapeGenerator:
             # Calculate final Moran's I
             achieved_morans_i = self.calculate_morans_i(final_binary)
             
+            # Check success with both tolerances
+            success, actual_canopy = check_success(final_binary, achieved_morans_i, target_morans_i, canopy_percent)
+            
             return {
                 'landscape': final_binary,
                 'continuous_landscape': final_continuous,
                 'target_morans_i': target_morans_i,
                 'achieved_morans_i': achieved_morans_i,
                 'difference': abs(achieved_morans_i - target_morans_i),
+                'target_canopy': canopy_percent,
+                'actual_canopy': actual_canopy,
+                'canopy_difference': abs(actual_canopy - canopy_percent),
                 'optimal_parameter': optimal_param,
                 'algorithm': algorithm,
-                'success': abs(achieved_morans_i - target_morans_i) <= tolerance
+                'success': success,
+                'morans_tolerance': morans_tolerance,
+                'canopy_tolerance': canopy_tolerance
             }
             
         except Exception as e:
@@ -478,7 +489,7 @@ class NeutralLandscapeGenerator:
                     print(f"  Trying fallback algorithm: {fallback_alg}")
                     fallback_result = self.generate_landscape_with_target_morans(
                         nrows, ncols, canopy_percent, target_morans_i, 
-                        algorithm=fallback_alg, tolerance=tolerance*2, max_iterations=max_iterations//2
+                        algorithm=fallback_alg, morans_tolerance=morans_tolerance*1.5, canopy_tolerance=canopy_tolerance*1.5, max_iterations=max_iterations//2
                     )
                     fallback_result['algorithm'] = f"{algorithm}_fallback_{fallback_alg}"
                     return fallback_result
@@ -491,6 +502,7 @@ class NeutralLandscapeGenerator:
             threshold = np.percentile(fallback, (1-canopy_percent)*100)
             fallback_binary = (fallback > threshold).astype(int)
             fallback_morans = self.calculate_morans_i(fallback_binary)
+            fallback_success, fallback_actual_canopy = check_success(fallback_binary, fallback_morans, target_morans_i, canopy_percent)
             
             return {
                 'landscape': fallback_binary,
@@ -498,13 +510,19 @@ class NeutralLandscapeGenerator:
                 'target_morans_i': target_morans_i,
                 'achieved_morans_i': fallback_morans,
                 'difference': abs(fallback_morans - target_morans_i),
+                'target_canopy': canopy_percent,
+                'actual_canopy': fallback_actual_canopy,
+                'canopy_difference': abs(fallback_actual_canopy - canopy_percent),
                 'optimal_parameter': None,
                 'algorithm': 'final_random_fallback',
-                'success': False
+                'success': fallback_success,
+                'morans_tolerance': morans_tolerance,
+                'canopy_tolerance': canopy_tolerance
             }
     
     def run_parameter_sweep(self, aoi_values, canopy_extents, morans_i_values, 
-                          algorithm=None, n_replicates=1, save_landscapes=False):
+                          algorithm=None, n_replicates=1, save_landscapes=False,
+                          morans_tolerance=0.025, canopy_tolerance=0.001, filter_unsuccessful=True):
         """
         Run complete parameter sweep across all combinations
         
@@ -522,6 +540,12 @@ class NeutralLandscapeGenerator:
             Number of replicates per parameter combination
         save_landscapes : bool
             Whether to store actual landscape arrays (memory intensive)
+        morans_tolerance : float
+            Acceptable difference from target Moran's I (default=0.025)
+        canopy_tolerance : float
+            Acceptable difference from target canopy extent (default=0.001 = 0.1%)
+        filter_unsuccessful : bool
+            Whether to filter out landscapes that don't meet tolerance criteria (default=True)
             
         Returns:
         --------
@@ -541,12 +565,18 @@ class NeutralLandscapeGenerator:
         print(f"Canopy extents: {canopy_extents}")
         print(f"Moran's I values: {morans_i_values}")
         print(f"Replicates per combination: {n_replicates}")
+        print(f"Tolerances: Moran's I ±{morans_tolerance}, Canopy ±{canopy_tolerance:.1%}")
+        if filter_unsuccessful:
+            print("FILTERING: Only successful landscapes will be kept for analysis")
+        else:
+            print("NO FILTERING: All landscapes will be kept regardless of success")
         
         total_combinations = len(aoi_values) * len(canopy_extents) * len(morans_i_values) * n_replicates
         print(f"Total landscapes to generate: {total_combinations}")
         
         self.results = []
         combination_count = 0
+        filtered_count = 0
         
         for aoi, canopy_extent, target_morans_i in product(aoi_values, canopy_extents, morans_i_values):
             for replicate in range(n_replicates):
@@ -561,8 +591,15 @@ class NeutralLandscapeGenerator:
                 
                 # Generate landscape
                 result = self.generate_landscape_with_target_morans(
-                    nrows, ncols, canopy_extent, target_morans_i, algorithm
+                    nrows, ncols, canopy_extent, target_morans_i, algorithm,
+                    morans_tolerance, canopy_tolerance
                 )
+                
+                # Check if we should keep this landscape
+                if filter_unsuccessful and not result['success']:
+                    filtered_count += 1
+                    print(f"FILTERED: Moran's I error={result['difference']:.4f}, Canopy error={result.get('canopy_difference', 0):.4f}")
+                    continue  # Skip this landscape
                 
                 # Generate sample points for this AOI (cached for consistency)
                 x_coords, y_coords = self.generate_sample_points(aoi)
@@ -582,15 +619,18 @@ class NeutralLandscapeGenerator:
                     'nrows': nrows,
                     'ncols': ncols,
                     'actual_area_m2': nrows * ncols * self.cell_size**2,
-                    'canopy_extent_target': canopy_extent,
-                    'canopy_extent_actual': np.mean(result['landscape']),
                     'morans_i_target': target_morans_i,
                     'morans_i_achieved': result['achieved_morans_i'],
                     'morans_i_difference': result['difference'],
+                    'canopy_extent_target': canopy_extent,
+                    'canopy_extent_actual': result.get('actual_canopy', np.mean(result['landscape'])),
+                    'canopy_difference': result.get('canopy_difference', abs(np.mean(result['landscape']) - canopy_extent)),
                     'optimal_parameter': result['optimal_parameter'],
                     'algorithm': result['algorithm'],
                     'success': result['success'],
                     'generation_time_seconds': time.time() - start_time,
+                    'morans_tolerance_used': morans_tolerance,
+                    'canopy_tolerance_used': canopy_tolerance,
                     # Sampling results
                     'n_sample_points': sampling_stats['n_sample_points'],
                     'n_canopy_hits': sampling_stats['n_canopy_hits'],
@@ -629,15 +669,33 @@ class NeutralLandscapeGenerator:
                 self.results.append(result_record)
                 
                 # Progress update
-                success_rate = np.mean([r['success'] for r in self.results])
-                avg_time = np.mean([r['generation_time_seconds'] for r in self.results])
-                avg_bias = np.mean([abs(r['sampling_bias']) for r in self.results])
-                print(f"Success: {'✓' if result['success'] else '✗'} | "
-                      f"Success rate: {success_rate:.1%} | "
-                      f"Avg time: {avg_time:.2f}s | "
-                      f"Sampling bias: {sampling_stats['bias']:+.4f}")
+                kept_results = len(self.results)
+                if kept_results > 0:
+                    success_rate = np.mean([r['success'] for r in self.results])
+                    avg_time = np.mean([r['generation_time_seconds'] for r in self.results])
+                    avg_morans_error = np.mean([r['morans_i_difference'] for r in self.results])
+                    avg_canopy_error = np.mean([r['canopy_difference'] for r in self.results])
+                    print(f"Success: {'✓' if result['success'] else '✗'} | "
+                          f"Kept: {kept_results} | Filtered: {filtered_count} | "
+                          f"Success rate: {success_rate:.1%} | "
+                          f"Avg Moran's error: {avg_morans_error:.4f} | "
+                          f"Avg canopy error: {avg_canopy_error:.4f}")
+                else:
+                    print(f"Success: {'✓' if result['success'] else '✗'} | "
+                          f"Kept: 0 | Filtered: {filtered_count}")
         
-        return pd.DataFrame(self.results)
+        final_df = pd.DataFrame(self.results)
+        
+        print(f"\n" + "="*60)
+        print("FILTERING SUMMARY")
+        print("="*60)
+        print(f"Total combinations attempted: {combination_count}")
+        print(f"Landscapes kept: {len(final_df)}")
+        print(f"Landscapes filtered out: {filtered_count}")
+        if combination_count > 0:
+            print(f"Overall retention rate: {len(final_df)/combination_count:.1%}")
+        
+        return final_df
     
     def plot_results_summary(self, results_df):
         """
