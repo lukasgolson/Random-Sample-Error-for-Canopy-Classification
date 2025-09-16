@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Neutral Landscape Generator with Bootstrap Sampling Analysis
 Designed for HPC environments with configurable parameters
@@ -38,7 +39,7 @@ CELL_SIZE = 1  # Size of each cell in meters
 RANDOM_SEED = 42  # For reproducible results
 
 # Replication and Processing
-N_REPLICATES = 2  # Number of replicates per parameter combination
+N_REPLICATES = 3  # Number of replicates per parameter combination (increased for 30min run)
 SAVE_LANDSCAPES = True  # Whether to save landscape arrays (required for sample points export)
 
 # Quality Control Tolerances
@@ -47,21 +48,21 @@ CANOPY_TOLERANCE = 0.001  # Acceptable difference from target canopy extent (±0
 FILTER_UNSUCCESSFUL = True  # Only keep landscapes meeting tolerance criteria
 
 # Optimization Parameters
-MAX_ITERATIONS = 50  # Maximum optimization iterations per landscape
+MAX_ITERATIONS = 75  # Increased for better success rates with 192 CPUs
 N_BOOTSTRAP_SAMPLES = 1000  # Number of bootstrap samples for confidence intervals
 CONFIDENCE_LEVEL = 0.95  # Confidence level for intervals
 
 # Algorithm Selection (None = auto-select based on target Moran's I)
 FORCE_ALGORITHM = None  # Options: None, 'mpd', 'randomClusterNN', 'random'
 
-# Output Settings
-OUTPUT_DIR = 'neutral_landscape_results'  # Output directory
-OUTPUT_PREFIX = 'landscape_analysis'  # Prefix for output files
+# Output Settings - Configured for your scratch directory
+OUTPUT_DIR = '/scratch/arbmarta/NLM/results'  # Output directory on scratch
+OUTPUT_PREFIX = 'NLM_analysis'  # Prefix for output files
 GENERATE_PLOTS = False  # Set to False for HPC environments without display
 
-# HPC Settings
+# HPC Settings - Optimized for your 192-CPU allocation
 VERBOSE = True  # Print progress messages
-SAVE_MEMORY = True  # Optimize for memory usage on HPC
+SAVE_MEMORY = False  # With 192 CPUs, we can afford more memory usage for speed
 PARALLEL_SAFE = True  # Ensure thread safety for parallel execution
 
 # =============================================================================
