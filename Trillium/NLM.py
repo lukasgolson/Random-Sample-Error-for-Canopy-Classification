@@ -1,10 +1,5 @@
-#!/usr/bin/env python3
-"""
-Neutral Landscape Generator with Bootstrap Sampling Analysis
-Designed for HPC environments with configurable parameters
-
-Usage: python neutral_landscape_generator.py
-"""
+# Neutral Landscape Generator with Bootstrap Sampling Analysis
+# Designed for HPC environments with configurable parameters
 
 import numpy as np
 import pandas as pd
