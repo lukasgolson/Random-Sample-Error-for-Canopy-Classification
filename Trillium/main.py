@@ -1,133 +1,222 @@
-import time
-import warnings
-from itertools import product
+# Neutral Landscape Generator with Bootstrap Sampling Analysis
+# Designed for local environments with configurable parameters
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pysal.explore import esda
+import nlmpy
 from pysal.lib import weights
+from pysal.explore import esda
 from scipy.optimize import minimize_scalar
-
-from nlmpy import nlmpy
+from scipy.stats import norm
+import matplotlib.pyplot as plt
+import seaborn as sns
+from itertools import product
+import time
+import warnings
+import argparse
+import os
+import sys
 
 warnings.filterwarnings('ignore')
+
+# =============================================================================
+# CONFIGURATION SETTINGS - MODIFY THESE AS NEEDED
+# =============================================================================
+
+# Landscape Parameters
+AOI_VALUES = [200, 600, 4000]  # Area of interest in m²
+CANOPY_EXTENTS = [0.2, 0.4, 0.6, 0.8]  # Target canopy coverage proportions
+MORANS_I_VALUES = [-0.5, -0.2, 0.0, 0.2, 0.5, 0.8]  # Target Moran's I values
+
+# Sampling Parameters
+N_SAMPLE_POINTS = 100000  # Number of random sample points to generate
+CELL_SIZE = 1  # Size of each cell in meters
+RANDOM_SEED = 42  # For reproducible results
+
+# Replication and Processing
+N_REPLICATES = 3  # Number of replicates per parameter combination (increased for 30min run)
+SAVE_LANDSCAPES = True  # Whether to save landscape arrays (required for sample points export)
+
+# Quality Control Tolerances
+MORANS_TOLERANCE = 0.025  # Acceptable difference from target Moran's I (±0.025)
+CANOPY_TOLERANCE = 0.001  # Acceptable difference from target canopy extent (±0.1%)
+FILTER_UNSUCCESSFUL = True  # Only keep landscapes meeting tolerance criteria
+
+# Optimization Parameters
+MAX_ITERATIONS = 75  # Increased for better success rates with 192 CPUs
+N_BOOTSTRAP_SAMPLES = 1000  # Number of bootstrap samples for confidence intervals
+CONFIDENCE_LEVEL = 0.95  # Confidence level for intervals
+
+# Algorithm Selection (None = auto-select based on target Moran's I)
+FORCE_ALGORITHM = None  # Options: None, 'mpd', 'randomClusterNN', 'random'
+
+# Output Settings - Configured for your scratch directory
+OUTPUT_DIR = '/scratch/arbmarta/NLM/results'  # Output directory on scratch
+OUTPUT_PREFIX = 'NLM_analysis'  # Prefix for output files
+GENERATE_PLOTS = False  # Set to False for HPC environments without display
+
+# HPC Settings - Optimized for your 192-CPU allocation
+VERBOSE = True  # Print progress messages
+SAVE_MEMORY = False  # With 192 CPUs, we can afford more memory usage for speed
+PARALLEL_SAFE = True  # Ensure thread safety for parallel execution
+
+# =============================================================================
+# MAIN GENERATOR CLASS
+# =============================================================================
 
 class NeutralLandscapeGenerator:
     """
     Generate neutral landscapes with specified AOI, canopy extent, and Moran's I values
     Apply consistent random sampling across all landscapes for comparison studies
+    Includes comprehensive bootstrap analysis for confidence intervals
     """
     
-    def __init__(self, cell_size=1, n_sample_points=100000, random_seed=42):
+    def __init__(self, cell_size=CELL_SIZE, n_sample_points=N_SAMPLE_POINTS, 
+                 random_seed=RANDOM_SEED, verbose=VERBOSE):
         """
-        Initialize generator
-        
-        Parameters:
-        -----------
-        cell_size : float
-            Size of each cell in meters (default=1m for easier calculations)
-        n_sample_points : int
-            Number of random sample points to generate (default=100,000)
-        random_seed : int
-            Random seed for reproducible sample point generation
+        Initialize generator with configuration parameters
         """
         self.cell_size = cell_size
         self.n_sample_points = n_sample_points
         self.random_seed = random_seed
+        self.verbose = verbose
         self.results = []
         self.sample_points_cache = {}  # Cache sample points by AOI size
+        
+        if self.verbose:
+            print(f"Initialized NeutralLandscapeGenerator:")
+            print(f"  Cell size: {cell_size}m")
+            print(f"  Sample points: {n_sample_points:,}")
+            print(f"  Random seed: {random_seed}")
+        
+    def log(self, message):
+        """Thread-safe logging function"""
+        if self.verbose:
+            print(f"[{time.strftime('%H:%M:%S')}] {message}")
+            sys.stdout.flush()
         
     def generate_sample_points(self, aoi_m2):
         """
         Generate consistent random sample points for a given AOI
-        
-        Parameters:
-        -----------
-        aoi_m2 : float
-            Area of interest in square meters
-            
-        Returns:
-        --------
-        tuple : (x_coords, y_coords) arrays of sample point coordinates
         """
-        # Check if we already have sample points for this AOI
         if aoi_m2 in self.sample_points_cache:
             return self.sample_points_cache[aoi_m2]
         
-        # Calculate landscape extent
         side_length = np.sqrt(aoi_m2)
-        
-        # Set random seed for reproducibility
         np.random.seed(self.random_seed)
         
-        # Generate random coordinates within the AOI bounds
         x_coords = np.random.uniform(0, side_length, self.n_sample_points)
         y_coords = np.random.uniform(0, side_length, self.n_sample_points)
         
-        # Cache the sample points
         self.sample_points_cache[aoi_m2] = (x_coords, y_coords)
-        
         return x_coords, y_coords
     
     def sample_landscape(self, landscape, x_coords, y_coords):
         """
         Sample landscape values at given coordinates
-        
-        Parameters:
-        -----------
-        landscape : np.array
-            2D binary landscape array (0s and 1s)
-        x_coords, y_coords : np.array
-            Sample point coordinates
-            
-        Returns:
-        --------
-        np.array : Binary array of canopy hits (1) or misses (0)
         """
         nrows, ncols = landscape.shape
-        
-        # Convert coordinates to grid indices
-        # Assuming landscape spans from 0 to sqrt(AOI) in both directions
-        side_length = nrows * self.cell_size
         
         col_indices = np.floor(x_coords / self.cell_size).astype(int)
         row_indices = np.floor(y_coords / self.cell_size).astype(int)
         
-        # Ensure indices are within bounds
         col_indices = np.clip(col_indices, 0, ncols - 1)
         row_indices = np.clip(row_indices, 0, nrows - 1)
         
-        # Sample landscape values
         sampled_values = landscape[row_indices, col_indices]
-        
         return sampled_values
+    
+    def calculate_bootstrap_statistics(self, sampled_values, n_bootstrap=N_BOOTSTRAP_SAMPLES, 
+                                     confidence_level=CONFIDENCE_LEVEL):
+        """
+        Calculate bootstrap statistics for sampling results
+        """
+        n_samples = len(sampled_values)
+        bootstrap_proportions = []
+        
+        np.random.seed(self.random_seed + 1000)
+        
+        for i in range(n_bootstrap):
+            bootstrap_sample = np.random.choice(sampled_values, size=n_samples, replace=True)
+            bootstrap_proportion = np.mean(bootstrap_sample)
+            bootstrap_proportions.append(bootstrap_proportion)
+        
+        bootstrap_proportions = np.array(bootstrap_proportions)
+        
+        bootstrap_mean = np.mean(bootstrap_proportions)
+        bootstrap_std = np.std(bootstrap_proportions)
+        
+        alpha = 1 - confidence_level
+        lower_percentile = (alpha/2) * 100
+        upper_percentile = (1 - alpha/2) * 100
+        
+        ci_lower = np.percentile(bootstrap_proportions, lower_percentile)
+        ci_upper = np.percentile(bootstrap_proportions, upper_percentile)
+        
+        # BCa confidence intervals
+        original_proportion = np.mean(sampled_values)
+        bias_correction = np.sum(bootstrap_proportions < original_proportion) / n_bootstrap
+        bias_correction = 2 * bias_correction - 1
+        
+        # Jackknife for acceleration
+        jackknife_proportions = []
+        for i in range(n_samples):
+            jackknife_sample = np.concatenate([sampled_values[:i], sampled_values[i+1:]])
+            jackknife_proportions.append(np.mean(jackknife_sample))
+        
+        jackknife_proportions = np.array(jackknife_proportions)
+        jackknife_mean = np.mean(jackknife_proportions)
+        
+        if np.sum((jackknife_mean - jackknife_proportions)**2) > 0:
+            acceleration = np.sum((jackknife_mean - jackknife_proportions)**3) / (6 * (np.sum((jackknife_mean - jackknife_proportions)**2))**1.5)
+        else:
+            acceleration = 0
+        
+        z_alpha_2 = norm.ppf(alpha/2)
+        z_1_alpha_2 = norm.ppf(1 - alpha/2)
+        
+        bca_lower_z = bias_correction + (bias_correction + z_alpha_2) / (1 - acceleration * (bias_correction + z_alpha_2))
+        bca_upper_z = bias_correction + (bias_correction + z_1_alpha_2) / (1 - acceleration * (bias_correction + z_1_alpha_2))
+        
+        bca_lower_percentile = np.clip(norm.cdf(bca_lower_z) * 100, 0, 100)
+        bca_upper_percentile = np.clip(norm.cdf(bca_upper_z) * 100, 0, 100)
+        
+        bca_ci_lower = np.percentile(bootstrap_proportions, bca_lower_percentile)
+        bca_ci_upper = np.percentile(bootstrap_proportions, bca_upper_percentile)
+        
+        return {
+            'bootstrap_mean': bootstrap_mean,
+            'bootstrap_std': bootstrap_std,
+            'bootstrap_samples': n_bootstrap,
+            'percentile_ci_lower': ci_lower,
+            'percentile_ci_upper': ci_upper,
+            'percentile_ci_width': ci_upper - ci_lower,
+            'bca_ci_lower': bca_ci_lower,
+            'bca_ci_upper': bca_ci_upper,
+            'bca_ci_width': bca_ci_upper - bca_ci_lower,
+            'bias_correction': bias_correction,
+            'acceleration': acceleration
+        }
     
     def calculate_sampling_statistics(self, sampled_values, true_canopy_proportion):
         """
-        Calculate sampling statistics
-        
-        Parameters:
-        -----------
-        sampled_values : np.array
-            Binary array of sample results
-        true_canopy_proportion : float
-            True proportion of canopy in landscape
-            
-        Returns:
-        --------
-        dict : Sampling statistics
+        Calculate comprehensive sampling statistics including bootstrap analysis
         """
         n_canopy_hits = np.sum(sampled_values)
         estimated_proportion = n_canopy_hits / len(sampled_values)
         bias = estimated_proportion - true_canopy_proportion
         absolute_error = abs(bias)
         
-        # Calculate confidence interval (95%)
         std_error = np.sqrt(estimated_proportion * (1 - estimated_proportion) / len(sampled_values))
         ci_lower = estimated_proportion - 1.96 * std_error
         ci_upper = estimated_proportion + 1.96 * std_error
         ci_width = ci_upper - ci_lower
+        
+        bootstrap_stats = self.calculate_bootstrap_statistics(sampled_values)
+        
+        ci_contains_true = ci_lower <= true_canopy_proportion <= ci_upper
+        bootstrap_percentile_contains_true = bootstrap_stats['percentile_ci_lower'] <= true_canopy_proportion <= bootstrap_stats['percentile_ci_upper']
+        bootstrap_bca_contains_true = bootstrap_stats['bca_ci_lower'] <= true_canopy_proportion <= bootstrap_stats['bca_ci_upper']
         
         return {
             'n_sample_points': len(sampled_values),
@@ -137,130 +226,152 @@ class NeutralLandscapeGenerator:
             'bias': bias,
             'absolute_error': absolute_error,
             'relative_error': absolute_error / true_canopy_proportion if true_canopy_proportion > 0 else 0,
+            'standard_error': std_error,
             'ci_lower': ci_lower,
             'ci_upper': ci_upper,
             'ci_width': ci_width,
-            'ci_contains_true': ci_lower <= true_canopy_proportion <= ci_upper
+            'ci_contains_true': ci_contains_true,
+            'bootstrap_mean': bootstrap_stats['bootstrap_mean'],
+            'bootstrap_std': bootstrap_stats['bootstrap_std'],
+            'bootstrap_samples': bootstrap_stats['bootstrap_samples'],
+            'bootstrap_percentile_ci_lower': bootstrap_stats['percentile_ci_lower'],
+            'bootstrap_percentile_ci_upper': bootstrap_stats['percentile_ci_upper'],
+            'bootstrap_percentile_ci_width': bootstrap_stats['percentile_ci_width'],
+            'bootstrap_percentile_contains_true': bootstrap_percentile_contains_true,
+            'bootstrap_bca_ci_lower': bootstrap_stats['bca_ci_lower'],
+            'bootstrap_bca_ci_upper': bootstrap_stats['bca_ci_upper'],
+            'bootstrap_bca_ci_width': bootstrap_stats['bca_ci_width'],
+            'bootstrap_bca_contains_true': bootstrap_bca_contains_true,
+            'bias_correction': bootstrap_stats['bias_correction'],
+            'acceleration': bootstrap_stats['acceleration']
         }
         
     def calculate_dimensions(self, aoi_m2):
-        """
-        Calculate grid dimensions for given area of interest
-        
-        Parameters:
-        -----------
-        aoi_m2 : float
-            Area of interest in square meters
-            
-        Returns:
-        --------
-        tuple : (nrows, ncols)
-        """
-        # Assume square landscape for simplicity
+        """Calculate grid dimensions for given area of interest"""
         side_length = np.sqrt(aoi_m2)
         cells_per_side = int(side_length / self.cell_size)
         return cells_per_side, cells_per_side
     
     def calculate_morans_i(self, binary_landscape):
-        """
-        Calculate Moran's I for a binary landscape
-        
-        Parameters:
-        -----------
-        binary_landscape : np.array
-            2D binary array (0s and 1s)
-            
-        Returns:
-        --------
-        float : Moran's I value
-        """
+        """Calculate Moran's I for a binary landscape"""
         nrows, ncols = binary_landscape.shape
-        
-        # Create spatial weights matrix (Queen's case - 8 neighbors)
         w = weights.lat2W(nrows, ncols, rook=False)
-        
-        # Calculate Moran's I
         moran = esda.Moran(binary_landscape.flatten(), w)
         return moran.I
     
+    def select_optimal_algorithm(self, target_morans_i):
+        """Select the best algorithm based on target Moran's I value"""
+        if target_morans_i < 0.2:
+            return 'random'
+        elif target_morans_i > 0.8:
+            return 'randomClusterNN'
+        else:
+            return 'mpd'
+    
     def generate_landscape_with_target_morans(self, nrows, ncols, canopy_percent, 
-                                            target_morans_i, algorithm='mpd', 
-                                            tolerance=0.05, max_iterations=50):
+                                            target_morans_i, algorithm=None, 
+                                            morans_tolerance=MORANS_TOLERANCE, 
+                                            canopy_tolerance=CANOPY_TOLERANCE, 
+                                            max_iterations=MAX_ITERATIONS):
         """
-        Generate landscape with target Moran's I value
+        Generate landscape with target Moran's I value using optimal algorithm selection
+        """
         
-        Parameters:
-        -----------
-        nrows, ncols : int
-            Landscape dimensions
-        canopy_percent : float
-            Proportion of landscape that should be canopy (0-1)
-        target_morans_i : float
-            Target Moran's I value (-1 to 1)
-        algorithm : str
-            'mpd' or 'randomClusterNN'
-        tolerance : float
-            Acceptable difference from target Moran's I
-        max_iterations : int
-            Maximum optimization iterations
-            
-        Returns:
-        --------
-        dict : Results including landscape, achieved Moran's I, and parameters
-        """
+        if algorithm is None:
+            algorithm = self.select_optimal_algorithm(target_morans_i)
+            if self.verbose:
+                self.log(f"Auto-selected algorithm: {algorithm} for target Moran's I = {target_morans_i:.2f}")
         
         def objective_function(param):
-            """Objective function to minimize difference from target Moran's I"""
             try:
                 if algorithm == 'mpd':
-                    # Midpoint displacement - param is h (roughness)
                     landscape = nlmpy.mpd(nrows, ncols, h=param)
                 elif algorithm == 'randomClusterNN':
-                    # Random cluster NN - param is p (proportion of cluster seeds)
                     landscape = nlmpy.randomClusterNN(nrows, ncols, p=param, n=4)
+                elif algorithm == 'random':
+                    landscape = nlmpy.random(nrows, ncols)
+                    if param > 0.1:
+                        from scipy import ndimage
+                        landscape = ndimage.gaussian_filter(landscape, sigma=param)
                 else:
                     raise ValueError(f"Unknown algorithm: {algorithm}")
                 
-                # Convert to binary based on canopy percentage
                 threshold = np.percentile(landscape, (1-canopy_percent)*100)
                 binary_landscape = (landscape > threshold).astype(int)
-                
-                # Calculate Moran's I
                 achieved_morans_i = self.calculate_morans_i(binary_landscape)
                 
-                # Return absolute difference from target
                 return abs(achieved_morans_i - target_morans_i)
                 
             except Exception as e:
-                # Return large penalty if generation fails
                 return 999.0
         
-        # Optimize parameter to achieve target Moran's I
-        try:
-            if algorithm == 'mpd':
-                # h parameter bounds for midpoint displacement
-                bounds = (0.01, 0.99)
-            else:
-                # p parameter bounds for random cluster
-                bounds = (0.01, 0.8)
+        def check_success(landscape, achieved_morans_i, target_morans_i, canopy_percent):
+            actual_canopy = np.mean(landscape)
+            morans_success = abs(achieved_morans_i - target_morans_i) <= morans_tolerance
+            canopy_success = abs(actual_canopy - canopy_percent) <= canopy_tolerance
+            return morans_success and canopy_success, actual_canopy
+        
+        # Algorithm-specific optimization
+        if algorithm == 'random':
+            try:
+                landscape = nlmpy.random(nrows, ncols)
+                threshold = np.percentile(landscape, (1-canopy_percent)*100)
+                binary_landscape = (landscape > threshold).astype(int)
+                achieved_morans_i = self.calculate_morans_i(binary_landscape)
                 
+                success, actual_canopy = check_success(binary_landscape, achieved_morans_i, target_morans_i, canopy_percent)
+                if success:
+                    return {
+                        'landscape': binary_landscape,
+                        'continuous_landscape': landscape,
+                        'target_morans_i': target_morans_i,
+                        'achieved_morans_i': achieved_morans_i,
+                        'difference': abs(achieved_morans_i - target_morans_i),
+                        'target_canopy': canopy_percent,
+                        'actual_canopy': actual_canopy,
+                        'canopy_difference': abs(actual_canopy - canopy_percent),
+                        'optimal_parameter': 0.0,
+                        'algorithm': algorithm,
+                        'success': True,
+                        'morans_tolerance': morans_tolerance,
+                        'canopy_tolerance': canopy_tolerance
+                    }
+                bounds = (0.0, 2.0)
+            except Exception:
+                bounds = (0.0, 2.0)
+        elif algorithm == 'mpd':
+            if target_morans_i < 0.3:
+                bounds = (0.7, 0.99)
+            elif target_morans_i > 0.7:
+                bounds = (0.01, 0.3)
+            else:
+                bounds = (0.01, 0.99)
+        else:  # randomClusterNN
+            if target_morans_i > 0.7:
+                bounds = (0.3, 0.8)
+            else:
+                bounds = (0.01, 0.5)
+        
+        try:
             result = minimize_scalar(objective_function, bounds=bounds, 
                                    method='bounded', options={'maxiter': max_iterations})
             
             optimal_param = result.x
             
-            # Generate final landscape with optimal parameter
             if algorithm == 'mpd':
                 final_continuous = nlmpy.mpd(nrows, ncols, h=optimal_param)
-            else:
+            elif algorithm == 'randomClusterNN':
                 final_continuous = nlmpy.randomClusterNN(nrows, ncols, p=optimal_param, n=4)
+            elif algorithm == 'random':
+                final_continuous = nlmpy.random(nrows, ncols)
+                if optimal_param > 0.1:
+                    from scipy import ndimage
+                    final_continuous = ndimage.gaussian_filter(final_continuous, sigma=optimal_param)
             
-            # Convert to binary
             threshold = np.percentile(final_continuous, (1-canopy_percent)*100)
             final_binary = (final_continuous > threshold).astype(int)
-            
-            # Calculate final Moran's I
             achieved_morans_i = self.calculate_morans_i(final_binary)
+            success, actual_canopy = check_success(final_binary, achieved_morans_i, target_morans_i, canopy_percent)
             
             return {
                 'landscape': final_binary,
@@ -268,18 +379,46 @@ class NeutralLandscapeGenerator:
                 'target_morans_i': target_morans_i,
                 'achieved_morans_i': achieved_morans_i,
                 'difference': abs(achieved_morans_i - target_morans_i),
+                'target_canopy': canopy_percent,
+                'actual_canopy': actual_canopy,
+                'canopy_difference': abs(actual_canopy - canopy_percent),
                 'optimal_parameter': optimal_param,
                 'algorithm': algorithm,
-                'success': abs(achieved_morans_i - target_morans_i) <= tolerance
+                'success': success,
+                'morans_tolerance': morans_tolerance,
+                'canopy_tolerance': canopy_tolerance
             }
             
         except Exception as e:
-            print(f"Error in optimization: {e}")
-            # Return fallback landscape if optimization fails
-            fallback = np.random(nrows, ncols)
+            if self.verbose:
+                self.log(f"Error in optimization: {e}")
+            
+            # Fallback strategy
+            fallback_algorithms = ['random', 'mpd', 'randomClusterNN']
+            fallback_algorithms = [alg for alg in fallback_algorithms if alg != algorithm]
+            
+            for fallback_alg in fallback_algorithms:
+                try:
+                    if self.verbose:
+                        self.log(f"Trying fallback algorithm: {fallback_alg}")
+                    fallback_result = self.generate_landscape_with_target_morans(
+                        nrows, ncols, canopy_percent, target_morans_i, 
+                        algorithm=fallback_alg, morans_tolerance=morans_tolerance*1.5, 
+                        canopy_tolerance=canopy_tolerance*1.5, max_iterations=max_iterations//2
+                    )
+                    fallback_result['algorithm'] = f"{algorithm}_fallback_{fallback_alg}"
+                    return fallback_result
+                except Exception:
+                    continue
+            
+            # Final fallback
+            if self.verbose:
+                self.log("Using final random fallback")
+            fallback = nlmpy.random(nrows, ncols)
             threshold = np.percentile(fallback, (1-canopy_percent)*100)
             fallback_binary = (fallback > threshold).astype(int)
             fallback_morans = self.calculate_morans_i(fallback_binary)
+            fallback_success, fallback_actual_canopy = check_success(fallback_binary, fallback_morans, target_morans_i, canopy_percent)
             
             return {
                 'landscape': fallback_binary,
@@ -287,75 +426,76 @@ class NeutralLandscapeGenerator:
                 'target_morans_i': target_morans_i,
                 'achieved_morans_i': fallback_morans,
                 'difference': abs(fallback_morans - target_morans_i),
+                'target_canopy': canopy_percent,
+                'actual_canopy': fallback_actual_canopy,
+                'canopy_difference': abs(fallback_actual_canopy - canopy_percent),
                 'optimal_parameter': None,
-                'algorithm': 'random_fallback',
-                'success': False
+                'algorithm': 'final_random_fallback',
+                'success': fallback_success,
+                'morans_tolerance': morans_tolerance,
+                'canopy_tolerance': canopy_tolerance
             }
     
     def run_parameter_sweep(self, aoi_values, canopy_extents, morans_i_values, 
-                          algorithm='mpd', n_replicates=1, save_landscapes=False):
+                          algorithm=FORCE_ALGORITHM, n_replicates=N_REPLICATES, 
+                          save_landscapes=SAVE_LANDSCAPES, morans_tolerance=MORANS_TOLERANCE, 
+                          canopy_tolerance=CANOPY_TOLERANCE, filter_unsuccessful=FILTER_UNSUCCESSFUL):
         """
         Run complete parameter sweep across all combinations
-        
-        Parameters:
-        -----------
-        aoi_values : list
-            Areas of interest in square meters [200, 600, 4000]
-        canopy_extents : list
-            Canopy coverage proportions [0.2, 0.4, 0.6, 0.8]
-        morans_i_values : list
-            Target Moran's I values [-0.5, 0, 0.5]
-        algorithm : str
-            Algorithm to use ('mpd' or 'randomClusterNN')
-        n_replicates : int
-            Number of replicates per parameter combination
-        save_landscapes : bool
-            Whether to store actual landscape arrays (memory intensive)
-            
-        Returns:
-        --------
-        pd.DataFrame : Results summary
         """
         
-        print(f"Starting parameter sweep with {algorithm} algorithm...")
-        print(f"AOI values: {aoi_values}")
-        print(f"Canopy extents: {canopy_extents}")
-        print(f"Moran's I values: {morans_i_values}")
-        print(f"Replicates per combination: {n_replicates}")
+        if algorithm is None:
+            self.log("Starting parameter sweep with AUTO-SELECTED algorithms...")
+            self.log("Algorithm selection strategy:")
+            self.log("  Moran's I < 0.2: 'random' algorithm")
+            self.log("  Moran's I 0.2-0.8: 'mpd' algorithm") 
+            self.log("  Moran's I > 0.8: 'randomClusterNN' algorithm")
+        else:
+            self.log(f"Starting parameter sweep with {algorithm} algorithm...")
+        
+        self.log(f"AOI values: {aoi_values}")
+        self.log(f"Canopy extents: {canopy_extents}")
+        self.log(f"Moran's I values: {morans_i_values}")
+        self.log(f"Replicates per combination: {n_replicates}")
+        self.log(f"Tolerances: Moran's I ±{morans_tolerance}, Canopy ±{canopy_tolerance:.1%}")
+        
+        if filter_unsuccessful:
+            self.log("FILTERING: Only successful landscapes will be kept for analysis")
+        else:
+            self.log("NO FILTERING: All landscapes will be kept regardless of success")
         
         total_combinations = len(aoi_values) * len(canopy_extents) * len(morans_i_values) * n_replicates
-        print(f"Total landscapes to generate: {total_combinations}")
+        self.log(f"Total landscapes to generate: {total_combinations}")
         
         self.results = []
         combination_count = 0
+        filtered_count = 0
         
         for aoi, canopy_extent, target_morans_i in product(aoi_values, canopy_extents, morans_i_values):
             for replicate in range(n_replicates):
                 combination_count += 1
                 start_time = time.time()
                 
-                print(f"\nCombination {combination_count}/{total_combinations}")
-                print(f"AOI: {aoi}m², Canopy: {canopy_extent:.1%}, Moran's I: {target_morans_i:.2f}, Rep: {replicate+1}")
+                self.log(f"Combination {combination_count}/{total_combinations}")
+                self.log(f"AOI: {aoi}m², Canopy: {canopy_extent:.1%}, Moran's I: {target_morans_i:.2f}, Rep: {replicate+1}")
                 
-                # Calculate landscape dimensions
                 nrows, ncols = self.calculate_dimensions(aoi)
                 
-                # Generate landscape
                 result = self.generate_landscape_with_target_morans(
-                    nrows, ncols, canopy_extent, target_morans_i, algorithm
+                    nrows, ncols, canopy_extent, target_morans_i, algorithm,
+                    morans_tolerance, canopy_tolerance
                 )
                 
-                # Generate sample points for this AOI (cached for consistency)
+                if filter_unsuccessful and not result['success']:
+                    filtered_count += 1
+                    self.log(f"FILTERED: Moran's I error={result['difference']:.4f}, Canopy error={result.get('canopy_difference', 0):.4f}")
+                    continue
+                
                 x_coords, y_coords = self.generate_sample_points(aoi)
-                
-                # Sample the landscape
                 sampled_values = self.sample_landscape(result['landscape'], x_coords, y_coords)
-                
-                # Calculate sampling statistics
                 true_canopy_proportion = np.mean(result['landscape'])
                 sampling_stats = self.calculate_sampling_statistics(sampled_values, true_canopy_proportion)
                 
-                # Store results
                 result_record = {
                     'combination_id': combination_count,
                     'replicate': replicate + 1,
@@ -363,15 +503,18 @@ class NeutralLandscapeGenerator:
                     'nrows': nrows,
                     'ncols': ncols,
                     'actual_area_m2': nrows * ncols * self.cell_size**2,
-                    'canopy_extent_target': canopy_extent,
-                    'canopy_extent_actual': np.mean(result['landscape']),
                     'morans_i_target': target_morans_i,
                     'morans_i_achieved': result['achieved_morans_i'],
                     'morans_i_difference': result['difference'],
+                    'canopy_extent_target': canopy_extent,
+                    'canopy_extent_actual': result.get('actual_canopy', np.mean(result['landscape'])),
+                    'canopy_difference': result.get('canopy_difference', abs(np.mean(result['landscape']) - canopy_extent)),
                     'optimal_parameter': result['optimal_parameter'],
                     'algorithm': result['algorithm'],
                     'success': result['success'],
                     'generation_time_seconds': time.time() - start_time,
+                    'morans_tolerance_used': morans_tolerance,
+                    'canopy_tolerance_used': canopy_tolerance,
                     # Sampling results
                     'n_sample_points': sampling_stats['n_sample_points'],
                     'n_canopy_hits': sampling_stats['n_canopy_hits'],
@@ -382,7 +525,22 @@ class NeutralLandscapeGenerator:
                     'ci_lower': sampling_stats['ci_lower'],
                     'ci_upper': sampling_stats['ci_upper'],
                     'ci_width': sampling_stats['ci_width'],
-                    'ci_contains_true': sampling_stats['ci_contains_true']
+                    'ci_contains_true': sampling_stats['ci_contains_true'],
+                    'standard_error': sampling_stats['standard_error'],
+                    # Bootstrap results
+                    'bootstrap_mean': sampling_stats['bootstrap_mean'],
+                    'bootstrap_std': sampling_stats['bootstrap_std'],
+                    'bootstrap_samples': sampling_stats['bootstrap_samples'],
+                    'bootstrap_percentile_ci_lower': sampling_stats['bootstrap_percentile_ci_lower'],
+                    'bootstrap_percentile_ci_upper': sampling_stats['bootstrap_percentile_ci_upper'],
+                    'bootstrap_percentile_ci_width': sampling_stats['bootstrap_percentile_ci_width'],
+                    'bootstrap_percentile_contains_true': sampling_stats['bootstrap_percentile_contains_true'],
+                    'bootstrap_bca_ci_lower': sampling_stats['bootstrap_bca_ci_lower'],
+                    'bootstrap_bca_ci_upper': sampling_stats['bootstrap_bca_ci_upper'],
+                    'bootstrap_bca_ci_width': sampling_stats['bootstrap_bca_ci_width'],
+                    'bootstrap_bca_contains_true': sampling_stats['bootstrap_bca_contains_true'],
+                    'bias_correction': sampling_stats['bias_correction'],
+                    'acceleration': sampling_stats['acceleration']
                 }
                 
                 if save_landscapes:
@@ -395,279 +553,153 @@ class NeutralLandscapeGenerator:
                 self.results.append(result_record)
                 
                 # Progress update
-                success_rate = np.mean([r['success'] for r in self.results])
-                avg_time = np.mean([r['generation_time_seconds'] for r in self.results])
-                avg_bias = np.mean([abs(r['sampling_bias']) for r in self.results])
-                print(f"Success: {'✓' if result['success'] else '✗'} | "
-                      f"Success rate: {success_rate:.1%} | "
-                      f"Avg time: {avg_time:.2f}s | "
-                      f"Sampling bias: {sampling_stats['bias']:+.4f}")
+                kept_results = len(self.results)
+                if kept_results > 0:
+                    success_rate = np.mean([r['success'] for r in self.results])
+                    avg_morans_error = np.mean([r['morans_i_difference'] for r in self.results])
+                    avg_canopy_error = np.mean([r['canopy_difference'] for r in self.results])
+                    self.log(f"Success: {'✓' if result['success'] else '✗'} | "
+                            f"Kept: {kept_results} | Filtered: {filtered_count} | "
+                            f"Success rate: {success_rate:.1%} | "
+                            f"Avg Moran's error: {avg_morans_error:.4f} | "
+                            f"Avg canopy error: {avg_canopy_error:.4f}")
+                else:
+                    self.log(f"Success: {'✓' if result['success'] else '✗'} | "
+                            f"Kept: 0 | Filtered: {filtered_count}")
         
-        return pd.DataFrame(self.results)
+        final_df = pd.DataFrame(self.results)
+        
+        self.log("="*60)
+        self.log("FILTERING SUMMARY")
+        self.log("="*60)
+        self.log(f"Total combinations attempted: {combination_count}")
+        self.log(f"Landscapes kept: {len(final_df)}")
+        self.log(f"Landscapes filtered out: {filtered_count}")
+        if combination_count > 0:
+            self.log(f"Overall retention rate: {len(final_df)/combination_count:.1%}")
+        
+        return final_df
     
-    def plot_results_summary(self, results_df):
-        """
-        Create summary plots of the parameter sweep results including sampling analysis
-        
-        Parameters:
-        -----------
-        results_df : pd.DataFrame
-            Results from run_parameter_sweep
-        """
-        fig, axes = plt.subplots(3, 2, figsize=(15, 18))
-        fig.suptitle('Neutral Landscape Generation & Sampling Results Summary', fontsize=16)
-        
-        # 1. Success rate by parameters
-        success_by_params = results_df.groupby(['aoi_m2', 'canopy_extent_target', 'morans_i_target'])['success'].mean().reset_index()
-        
-        ax1 = axes[0, 0]
-        scatter = ax1.scatter(success_by_params['morans_i_target'], 
-                             success_by_params['canopy_extent_target'], 
-                             s=success_by_params['aoi_m2']/20, 
-                             c=success_by_params['success'], 
-                             cmap='RdYlGn', vmin=0, vmax=1, alpha=0.7)
-        ax1.set_xlabel("Target Moran's I")
-        ax1.set_ylabel('Canopy Extent')
-        ax1.set_title('Success Rate by Parameters\n(Bubble size = AOI)')
-        plt.colorbar(scatter, ax=ax1, label='Success Rate')
-        
-        # 2. Moran's I accuracy
-        ax2 = axes[0, 1]
-        ax2.scatter(results_df['morans_i_target'], results_df['morans_i_achieved'], 
-                   alpha=0.6, c=results_df['aoi_m2'], cmap='viridis')
-        ax2.plot([-1, 1], [-1, 1], 'r--', alpha=0.8, label='Perfect match')
-        ax2.set_xlabel("Target Moran's I")
-        ax2.set_ylabel("Achieved Moran's I")
-        ax2.set_title("Moran's I Accuracy")
-        ax2.legend()
-        ax2.grid(True, alpha=0.3)
-        
-        # 3. Sampling bias vs Moran's I
-        ax3 = axes[1, 0]
-        scatter3 = ax3.scatter(results_df['morans_i_achieved'], results_df['sampling_bias'], 
-                              c=results_df['canopy_extent_actual'], cmap='Greens', alpha=0.7)
-        ax3.axhline(y=0, color='red', linestyle='--', alpha=0.8, label='No bias')
-        ax3.set_xlabel("Achieved Moran's I")
-        ax3.set_ylabel('Sampling Bias')
-        ax3.set_title('Sampling Bias vs Spatial Autocorrelation')
-        ax3.legend()
-        ax3.grid(True, alpha=0.3)
-        plt.colorbar(scatter3, ax=ax3, label='Canopy Extent')
-        
-        # 4. Confidence interval coverage
-        ax4 = axes[1, 1]
-        ci_coverage = results_df.groupby(['aoi_m2', 'morans_i_target'])['ci_contains_true'].mean().reset_index()
-        for aoi in sorted(ci_coverage['aoi_m2'].unique()):
-            data = ci_coverage[ci_coverage['aoi_m2'] == aoi]
-            ax4.plot(data['morans_i_target'], data['ci_contains_true'], 
-                    marker='o', label=f'{aoi} m²', linewidth=2)
-        ax4.axhline(y=0.95, color='red', linestyle='--', alpha=0.8, label='Expected 95%')
-        ax4.set_xlabel("Moran's I")
-        ax4.set_ylabel('CI Coverage Rate')
-        ax4.set_title('95% Confidence Interval Coverage')
-        ax4.legend()
-        ax4.grid(True, alpha=0.3)
-        ax4.set_ylim(0.8, 1.0)
-        
-        # 5. Sampling error vs AOI
-        ax5 = axes[2, 0]
-        results_df.boxplot(column='sampling_absolute_error', by='aoi_m2', ax=ax5)
-        ax5.set_xlabel('Area of Interest (m²)')
-        ax5.set_ylabel('Absolute Sampling Error')
-        ax5.set_title('Sampling Error by AOI Size')
-        plt.suptitle('')  # Remove automatic boxplot title
-        
-        # 6. Relative error by canopy extent
-        ax6 = axes[2, 1]
-        results_df.boxplot(column='sampling_relative_error', by='canopy_extent_target', ax=ax6)
-        ax6.set_xlabel('Target Canopy Extent')
-        ax6.set_ylabel('Relative Sampling Error')
-        ax6.set_title('Relative Error by Canopy Coverage')
-        plt.suptitle('')  # Remove automatic boxplot title
-        
-        plt.tight_layout()
-        plt.show()
-        
-        # Print comprehensive summary statistics
-        print("\n" + "="*70)
-        print("PARAMETER SWEEP & SAMPLING SUMMARY")
-        print("="*70)
-        print(f"Total landscapes generated: {len(results_df)}")
-        print(f"Overall success rate: {results_df['success'].mean():.1%}")
-        print(f"Average Moran's I error: {results_df['morans_i_difference'].mean():.4f}")
-        print(f"Average canopy extent error: {abs(results_df['canopy_extent_target'] - results_df['canopy_extent_actual']).mean():.4f}")
-        print(f"Average generation time: {results_df['generation_time_seconds'].mean():.2f} seconds")
-        
-        print(f"\nSAMPLING PERFORMANCE:")
-        print(f"Average sampling bias: {results_df['sampling_bias'].mean():+.6f}")
-        print(f"Average absolute error: {results_df['sampling_absolute_error'].mean():.6f}")
-        print(f"Average relative error: {results_df['sampling_relative_error'].mean():.4%}")
-        print(f"CI coverage rate: {results_df['ci_contains_true'].mean():.1%}")
-        
-        print(f"\nSuccess rate by AOI:")
-        for aoi in sorted(results_df['aoi_m2'].unique()):
-            success_rate = results_df[results_df['aoi_m2'] == aoi]['success'].mean()
-            avg_bias = results_df[results_df['aoi_m2'] == aoi]['sampling_bias'].mean()
-            print(f"  {aoi:,} m²: {success_rate:.1%} success, {avg_bias:+.6f} avg bias")
-
-    def export_sample_points_csv(self, results_df, filename='sample_points_results.csv'):
-        """
-        Export sample point results in the specified format
-        
-        Parameters:
-        -----------
-        results_df : pd.DataFrame
-            Results from run_parameter_sweep (must have save_landscapes=True)
-        filename : str
-            Output CSV filename
-            
-        Returns:
-        --------
-        pd.DataFrame : Sample points results in wide format
-        """
+    def export_sample_points_csv(self, results_df, filename):
+        """Export sample point results in the specified format"""
         
         if 'sample_points_x' not in results_df.columns:
             raise ValueError("Sample points data not found. Run parameter sweep with save_landscapes=True")
         
-        print(f"Exporting sample points data to {filename}...")
+        self.log(f"Exporting sample points data to {filename}...")
         
-        # Get sample points from first result (they're the same for each AOI)
         sample_points_data = []
         
-        # Process each AOI separately since sample points are consistent within AOI
         for aoi in results_df['aoi_m2'].unique():
             aoi_data = results_df[results_df['aoi_m2'] == aoi].iloc[0]
             x_coords = aoi_data['sample_points_x']
             y_coords = aoi_data['sample_points_y']
             
-            # Create base dataframe for this AOI
             aoi_sample_df = pd.DataFrame({
                 'Sample_Point_ID': range(1, len(x_coords) + 1),
                 'Sample_Point_X_Location': x_coords,
                 'Sample_Point_Y_Location': y_coords
             })
             
-            # Add results for each landscape as columns
             aoi_results = results_df[results_df['aoi_m2'] == aoi]
-            
-            for idx, row in aoi_results.iterrows():
-                # Create column name: {AOI}_{Target_Extent}_{Target_Moran}_{True_Extent}_{True_Moran}
-                col_name = f"{int(row['aoi_m2'])}_{row['canopy_extent_target']:.2f}_{row['morans_i_target']:.2f}_{row['canopy_extent_actual']:.3f}_{row['morans_i_achieved']:.3f}"
-                
-                # Add sample values for this landscape
-                aoi_sample_df[col_name] = row['sample_values']
-            
-            sample_points_data.append(aoi_sample_df)
-        
-        # For multiple AOIs, we need to handle them separately or combine
-        # Since sample points differ by AOI, let's create separate files or sections
-        if len(sample_points_data) == 1:
-            # Single AOI case
-            final_df = sample_points_data[0]
-        else:
-            # Multiple AOIs - create separate sheets or files
-            for i, (aoi, aoi_df) in enumerate(zip(sorted(results_df['aoi_m2'].unique()), sample_points_data)):
-                aoi_filename = filename.replace('.csv', f'_AOI_{int(aoi)}m2.csv')
-                aoi_df.to_csv(aoi_filename, index=False)
-                print(f"  Exported AOI {int(aoi)} m² data to {aoi_filename}")
-            
-            # Also create a combined summary file
-            final_df = sample_points_data[0]  # Use first AOI as base
-        
-        # Export main file
-        final_df.to_csv(filename, index=False)
-        print(f"Sample points data exported successfully!")
-        print(f"  File: {filename}")
-        print(f"  Sample points: {len(final_df):,}")
-        print(f"  Landscape columns: {len([col for col in final_df.columns if col not in ['Sample_Point_ID', 'Sample_Point_X_Location', 'Sample_Point_Y_Location']])}")
-        
-        return final_df
-    
-    def create_sample_points_summary(self, results_df):
-        """
-        Create a summary of landscape characteristics for reference
-        
-        Parameters:
-        -----------
-        results_df : pd.DataFrame
-            Results from run_parameter_sweep
-            
-        Returns:
-        --------
-        pd.DataFrame : Summary of landscape characteristics
-        """
-        
-        summary_data = []
-        
-        for idx, row in results_df.iterrows():
-            # Create column name matching the sample points export
-            col_name = f"{int(row['aoi_m2'])}_{row['canopy_extent_target']:.2f}_{row['morans_i_target']:.2f}_{row['canopy_extent_actual']:.3f}_{row['morans_i_achieved']:.3f}"
-            
-            summary_data.append({
-                'Column_Name': col_name,
-                'AOI_m2': int(row['aoi_m2']),
-                'Landscape_Dimensions': f"{row['nrows']}x{row['ncols']}",
-                'Target_Canopy_Extent': row['canopy_extent_target'],
-                'Actual_Canopy_Extent': row['canopy_extent_actual'],
-                'Target_Morans_I': row['morans_i_target'],
-                'Actual_Morans_I': row['morans_i_achieved'],
-                'Morans_I_Error': row['morans_i_difference'],
-                'Algorithm': row['algorithm'],
-                'Optimal_Parameter': row['optimal_parameter'],
-                'Success': row['success'],
-                'Replicate': row['replicate'],
-                'Combination_ID': row['combination_id'],
-                'Sample_Points_Used': row['n_sample_points'],
-                'Canopy_Hits': row['n_canopy_hits'],
-                'Estimated_Proportion': row['estimated_canopy_proportion'],
-                'Sampling_Bias': row['sampling_bias'],
-                'Generation_Time_Sec': row['generation_time_seconds']
-            })
-        
-        summary_df = pd.DataFrame(summary_data)
-        return summary_df
 
+# =============================================================================
+# MAIN EXECUTION
+# =============================================================================
 
-# Example usage and parameter sweep
 if __name__ == "__main__":
-    # Initialize generator with 100,000 sample points
+    import os
+    
+    # Create output directory
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    print("Starting Neutral Landscape Analysis...")
+    print(f"Output directory: {OUTPUT_DIR}")
+    
+    # Initialize generator
     generator = NeutralLandscapeGenerator(
-        cell_size=1,  # 1m resolution
-        n_sample_points=100000,  # 100,000 random sample points
-        random_seed=42  # For reproducible results
+        cell_size=CELL_SIZE,
+        n_sample_points=N_SAMPLE_POINTS,
+        random_seed=RANDOM_SEED,
+        verbose=VERBOSE
     )
     
-    # Define parameter ranges for your project
-    aoi_values = [200, 600, 4000]  # Area of interest in m²
-    canopy_extents = [0.2, 0.4, 0.6, 0.8]  # 20%, 40%, 60%, 80% canopy coverage
-    morans_i_values = [-0.5, -0.2, 0.0, 0.2, 0.5, 0.8]  # Range of spatial autocorrelation
-    
-    # Run parameter sweep with landscape and sample point data saved
-    print("Running parameter sweep...")
+    # Run parameter sweep
     results_df = generator.run_parameter_sweep(
-        aoi_values=aoi_values,
-        canopy_extents=canopy_extents,
-        morans_i_values=morans_i_values,
-        algorithm='mpd',  # Try 'randomClusterNN' as alternative
-        n_replicates=2,  # Generate 2 landscapes per parameter combination
-        save_landscapes=True  # REQUIRED for sample points export
+        aoi_values=AOI_VALUES,
+        canopy_extents=CANOPY_EXTENTS,
+        morans_i_values=MORANS_I_VALUES,
+        algorithm=FORCE_ALGORITHM,
+        n_replicates=N_REPLICATES,
+        save_landscapes=SAVE_LANDSCAPES,
+        morans_tolerance=MORANS_TOLERANCE,
+        canopy_tolerance=CANOPY_TOLERANCE,
+        filter_unsuccessful=FILTER_UNSUCCESSFUL
     )
     
-    # Export sample points results in specified format
-    print("\nExporting sample points data...")
-    sample_points_df = generator.export_sample_points_csv(
-        results_df, 
-        filename='sample_points_canopy_analysis.csv'
-    )
+    # Save results
+    results_filename = os.path.join(OUTPUT_DIR, f"{OUTPUT_PREFIX}_results.csv")
+    results_df.to_csv(results_filename, index=False)
+    print(f"\nResults saved to: {results_filename}")
     
-    # Create and export landscape summary
-    print("\nCreating landscape summary...")
-    summary_df = generator.create_sample_points_summary(results_df)
-    summary_df.to_csv('landscape_characteristics_summary.csv', index=False)
-    print("Landscape summary exported to 'landscape_characteristics_summary.csv'")
+    # Export sample points if landscapes were saved
+    if SAVE_LANDSCAPES and not results_df.empty:
+        try:
+            sample_points_filename = os.path.join(OUTPUT_DIR, f"{OUTPUT_PREFIX}_sample_points.csv")
+            generator.export_sample_points_csv(results_df, sample_points_filename)
+            print(f"Sample points saved to: {sample_points_filename}")
+        except Exception as e:
+            print(f"Could not export sample points: {e}")
     
-    # Create summary plots
-    print("\nGenerating summary plots...")
-    generator.plot_results_summary(results_df)
+    # Print summary
+    print(f"\nAnalysis Complete!")
+    print(f"Total landscapes generated: {len(results_df)}")
+    if len(results_df) > 0:
+        print(f"Success rate: {results_df['success'].mean():.1%}")
+        print(f"Average Moran's I error: {results_df['morans_i_difference'].mean():.4f}")
+        print(f"Average canopy error: {results_df['canopy_difference'].mean():.4f}")
     
-
+    # Generate basic plots if enabled
+    if GENERATE_PLOTS and len(results_df) > 0:
+        try:
+            import matplotlib.pyplot as plt
+            
+            # Create a simple summary plot
+            fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+            
+            # Plot 1: Moran's I accuracy
+            axes[0,0].scatter(results_df['morans_i_target'], results_df['morans_i_achieved'])
+            axes[0,0].plot([-1, 1], [-1, 1], 'r--', alpha=0.5)
+            axes[0,0].set_xlabel('Target Moran\'s I')
+            axes[0,0].set_ylabel('Achieved Moran\'s I')
+            axes[0,0].set_title('Moran\'s I Accuracy')
+            
+            # Plot 2: Canopy accuracy  
+            axes[0,1].scatter(results_df['canopy_extent_target'], results_df['canopy_extent_actual'])
+            axes[0,1].plot([0, 1], [0, 1], 'r--', alpha=0.5)
+            axes[0,1].set_xlabel('Target Canopy Extent')
+            axes[0,1].set_ylabel('Achieved Canopy Extent')
+            axes[0,1].set_title('Canopy Extent Accuracy')
+            
+            # Plot 3: Sampling bias
+            axes[1,0].hist(results_df['sampling_bias'], bins=20, alpha=0.7)
+            axes[1,0].axvline(0, color='red', linestyle='--', alpha=0.5)
+            axes[1,0].set_xlabel('Sampling Bias')
+            axes[1,0].set_ylabel('Frequency')
+            axes[1,0].set_title('Distribution of Sampling Bias')
+            
+            # Plot 4: CI coverage
+            coverage_rate = results_df['ci_contains_true'].mean()
+            axes[1,1].bar(['CI Contains True', 'CI Misses True'], 
+                         [coverage_rate, 1-coverage_rate])
+            axes[1,1].set_ylabel('Proportion')
+            axes[1,1].set_title(f'Confidence Interval Coverage\n({coverage_rate:.1%} coverage rate)')
+            
+            plt.tight_layout()
+            plot_filename = os.path.join(OUTPUT_DIR, f"{OUTPUT_PREFIX}_summary_plots.png")
+            plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
+            plt.show()
+            print(f"Summary plots saved to: {plot_filename}")
+            
+        except Exception as e:
+            print(f"Could not generate plots: {e}")
