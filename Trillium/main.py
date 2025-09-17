@@ -1,7 +1,6 @@
 import time
 import warnings
 from itertools import product
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -9,10 +8,24 @@ from pysal.explore import esda
 from pysal.lib import weights
 from scipy.optimize import minimize_scalar
 from scipy import ndimage
-
 from nlmpy import nlmpy
 
 warnings.filterwarnings('ignore')
+
+# GLOBAL PARAMETERS
+CELL_SIZE = 0.3 # 30 cm
+N_SAMPLE_POINTS = 100000     # number of sample points
+RANDOM_SEED = 42
+TOLERANCE = 0.025 # acceptable Moran's I difference
+MAX_ITERATIONS = 75 # max optimization iterations
+SAVE_LANDSCAPES = True # whether to save full landscapes
+
+# Parameter sweeps
+AOI_VALUES = [200, 600, 4000] # AOI in m²
+CANOPY_EXTENTS = np.round(np.arange(0, 1.01, 0.05), 2).tolist()  # canopy cover sweep
+MORANS_I_VALUES = np.round(np.arange(-1, 1.01, 0.05), 2).tolist()  # Moran's I sweep
+N_REPLICATES = 200 # replicates per combo
+ALGORITHM = None # None = auto-select
 
 class NeutralLandscapeGenerator:
     """
@@ -55,7 +68,7 @@ class NeutralLandscapeGenerator:
         """
         if target_morans_i < 0.2:
             return 'random'  # For low/negative autocorrelation
-        elif target_morans_i > 0.8:
+        elif target_morans_i > 0.6:
             return 'randomClusterNN'  # For high clustering
         else:
             return 'mpd'  # For moderate autocorrelation
@@ -734,44 +747,49 @@ class NeutralLandscapeGenerator:
         summary_df = pd.DataFrame(summary_data)
         return summary_df
 
-# Example usage and parameter sweep
 if __name__ == "__main__":
-    # Initialize generator with 100,000 sample points
+    # Initialize generator with global parameters
     generator = NeutralLandscapeGenerator(
-        cell_size=1,  # 1m resolution
-        n_sample_points=100000,  # 100,000 random sample points
-        random_seed=42  # For reproducible results
+        cell_size=CELL_SIZE,
+        n_sample_points=N_SAMPLE_POINTS,
+        random_seed=RANDOM_SEED
     )
 
-    # Define parameter ranges for your project
-    aoi_values = [200, 600]  # Area of interest in m²
-    canopy_extents = [0.2, 0.4, 0.6, 0.8]  # 20%, 40%, 60%, 80% canopy coverage
-    morans_i_values = [-0.5, -0.2, 0.0, 0.2, 0.5, 0.8]  # Range of spatial autocorrelation
-
-    # Run parameter sweep with AUTO-SELECTED algorithms
+    # Run parameter sweep with auto-selected algorithms
     print("Running parameter sweep...")
     results_df = generator.run_parameter_sweep(
-        aoi_values=aoi_values,
-        canopy_extents=canopy_extents,
-        morans_i_values=morans_i_values,
-        algorithm=None,  # AUTO-SELECT optimal algorithm for each target
-        n_replicates=2,  # Generate 2 landscapes per parameter combination
-        save_landscapes=True  # REQUIRED for sample points export
+        aoi_values=AOI_VALUES,
+        canopy_extents=CANOPY_EXTENTS,
+        morans_i_values=MORANS_I_VALUES,
+        algorithm=ALGORITHM,        # AUTO-SELECT if None
+        n_replicates=N_REPLICATES,
+        save_landscapes=SAVE_LANDSCAPES,
+        tolerance=TOLERANCE,
+        max_iterations=MAX_ITERATIONS
     )
 
-    # Export sample points results in specified format
+    # Keep only the best replicate per combination (lowest Moran's I difference)
+    best_results = (
+        results_df
+        .sort_values("morans_i_difference")
+        .groupby(["aoi_m2", "canopy_extent_target", "morans_i_target"], group_keys=False)
+        .apply(lambda g: g.head(1))
+        .reset_index(drop=True)
+    )
+
+    # Export sample points results
     print("\nExporting sample points data...")
     sample_points_df = generator.export_sample_points_csv(
-        results_df,
+        best_results,
         filename='sample_points_canopy_analysis.csv'
     )
 
     # Create and export landscape summary
     print("\nCreating landscape summary...")
-    summary_df = generator.create_sample_points_summary(results_df)
+    summary_df = generator.create_sample_points_summary(best_results)
     summary_df.to_csv('landscape_characteristics_summary.csv', index=False)
     print("Landscape summary exported to 'landscape_characteristics_summary.csv'")
 
-    # Create summary plots
+    # Generate summary plots
     print("\nGenerating summary plots...")
     generator.plot_results_summary(results_df)
