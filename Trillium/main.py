@@ -20,45 +20,45 @@ import sys
 warnings.filterwarnings('ignore')
 
 # =============================================================================
-# CONFIGURATION SETTINGS - MODIFY THESE AS NEEDED
+# CONFIGURATION SETTINGS - MODIFIED FOR PERSONAL COMPUTER USE
 # =============================================================================
 
-# Landscape Parameters
-AOI_VALUES = [200, 600, 4000]  # Area of interest in m²
-CANOPY_EXTENTS = [0.2, 0.4, 0.6, 0.8]  # Target canopy coverage proportions
-MORANS_I_VALUES = [-0.5, -0.2, 0.0, 0.2, 0.5, 0.8]  # Target Moran's I values
+# Landscape Parameters (reduced for faster computation)
+AOI_VALUES = [200, 600]  # Reduced from [200, 600, 4000] - large areas are slow
+CANOPY_EXTENTS = [0.2, 0.4, 0.6]  # Reduced from [0.2, 0.4, 0.6, 0.8]
+MORANS_I_VALUES = [-0.2, 0.0, 0.2, 0.5]  # Reduced from [-0.5, -0.2, 0.0, 0.2, 0.5, 0.8]
 
-# Sampling Parameters
-N_SAMPLE_POINTS = 100000  # Number of random sample points to generate
-CELL_SIZE = 1  # Size of each cell in meters
-RANDOM_SEED = 42  # For reproducible results
+# Sampling Parameters (reduced for memory efficiency)
+N_SAMPLE_POINTS = 10000  # Reduced from 100,000 for faster processing
+CELL_SIZE = 1  
+RANDOM_SEED = 42  
 
-# Replication and Processing
-N_REPLICATES = 3  # Number of replicates per parameter combination (increased for 30min run)
-SAVE_LANDSCAPES = True  # Whether to save landscape arrays (required for sample points export)
+# Replication and Processing (reduced for reasonable runtime)
+N_REPLICATES = 2  # Reduced from 3 for faster completion
+SAVE_LANDSCAPES = True  # Keep if you want to export sample points
 
-# Quality Control Tolerances
-MORANS_TOLERANCE = 0.025  # Acceptable difference from target Moran's I (±0.025)
-CANOPY_TOLERANCE = 0.001  # Acceptable difference from target canopy extent (±0.1%)
-FILTER_UNSUCCESSFUL = True  # Only keep landscapes meeting tolerance criteria
+# Quality Control Tolerances (slightly relaxed for faster convergence)
+MORANS_TOLERANCE = 0.025  # Increase to 0.05 for easier convergence
+CANOPY_TOLERANCE = 0.001 # Increase to 0.002 for easier convergence
+FILTER_UNSUCCESSFUL = True  # Keep filtering for quality
 
-# Optimization Parameters
-MAX_ITERATIONS = 75  # Increased for better success rates with 192 CPUs
-N_BOOTSTRAP_SAMPLES = 1000  # Number of bootstrap samples for confidence intervals
-CONFIDENCE_LEVEL = 0.95  # Confidence level for intervals
+# Optimization Parameters (reduced for faster runtime)
+MAX_ITERATIONS = 50  # Reduced from 75
+N_BOOTSTRAP_SAMPLES = 50  # Reduced from 10,000 for faster bootstrap
+CONFIDENCE_LEVEL = 0.95  
 
-# Algorithm Selection (None = auto-select based on target Moran's I)
-FORCE_ALGORITHM = None  # Options: None, 'mpd', 'randomClusterNN', 'random'
+# Algorithm Selection
+FORCE_ALGORITHM = None 
 
-# Output Settings - Configured for your scratch directory
-OUTPUT_DIR = '/scratch/arbmarta/NLM/results'  # Output directory on scratch
-OUTPUT_PREFIX = 'NLM_analysis'  # Prefix for output files
-GENERATE_PLOTS = False  # Set to False for HPC environments without display
+# Output Settings - Modified for personal computer
+OUTPUT_DIR = './results'
+OUTPUT_PREFIX = 'NLM_analysis'
+GENERATE_PLOTS = True  # Enable plots for personal use
 
-# HPC Settings - Optimized for your 192-CPU allocation
-VERBOSE = True  # Print progress messages
-SAVE_MEMORY = False  # With 192 CPUs, we can afford more memory usage for speed
-PARALLEL_SAFE = True  # Ensure thread safety for parallel execution
+# Personal Computer Settings
+VERBOSE = True  # Keep progress messages
+SAVE_MEMORY = True  # Enable memory saving for personal computer
+PARALLEL_SAFE = True  # Keep thread safety
 
 # =============================================================================
 # MAIN GENERATOR CLASS
