@@ -14,7 +14,6 @@ from nlmpy import nlmpy
 
 warnings.filterwarnings('ignore')
 
-
 class NeutralLandscapeGenerator:
     """
     Generate neutral landscapes with specified AOI, canopy extent, and Moran's I values
@@ -44,12 +43,12 @@ class NeutralLandscapeGenerator:
     def select_optimal_algorithm(self, target_morans_i):
         """
         Select the best algorithm based on target Moran's I value
-        
+
         Parameters:
         -----------
         target_morans_i : float
             Target Moran's I value
-            
+
         Returns:
         --------
         str : Optimal algorithm name
@@ -228,7 +227,7 @@ class NeutralLandscapeGenerator:
         --------
         dict : Results including landscape, achieved Moran's I, and parameters
         """
-        
+
         # Auto-select algorithm if not specified
         if algorithm is None:
             algorithm = self.select_optimal_algorithm(target_morans_i)
@@ -270,10 +269,10 @@ class NeutralLandscapeGenerator:
             # For random landscapes, try direct generation first
             try:
                 landscape = nlmpy.random(nrows, ncols)
-                threshold = np.percentile(landscape, (1-canopy_percent)*100)
+                threshold = np.percentile(landscape, (1 - canopy_percent) * 100)
                 binary_landscape = (landscape > threshold).astype(int)
                 achieved_morans_i = self.calculate_morans_i(binary_landscape)
-                
+
                 # If close enough, use as-is
                 if abs(achieved_morans_i - target_morans_i) <= tolerance:
                     return {
@@ -286,10 +285,10 @@ class NeutralLandscapeGenerator:
                         'algorithm': algorithm,
                         'success': True
                     }
-                
+
                 # If not close enough, try optimization with smoothing
                 bounds = (0.0, 2.0)  # Smoothing parameter
-                
+
             except Exception:
                 bounds = (0.0, 2.0)
         elif algorithm == 'mpd':
@@ -347,19 +346,19 @@ class NeutralLandscapeGenerator:
             # Multi-algorithm fallback strategy
             fallback_algorithms = ['random', 'mpd', 'randomClusterNN']
             fallback_algorithms = [alg for alg in fallback_algorithms if alg != algorithm]
-            
+
             for fallback_alg in fallback_algorithms:
                 try:
                     print(f"  Trying fallback algorithm: {fallback_alg}")
                     fallback_result = self.generate_landscape_with_target_morans(
-                        nrows, ncols, canopy_percent, target_morans_i, 
-                        algorithm=fallback_alg, tolerance=tolerance*2, max_iterations=max_iterations//2
+                        nrows, ncols, canopy_percent, target_morans_i,
+                        algorithm=fallback_alg, tolerance=tolerance * 2, max_iterations=max_iterations // 2
                     )
                     fallback_result['algorithm'] = f"{algorithm}_fallback_{fallback_alg}"
                     return fallback_result
                 except Exception:
                     continue
-            
+
             # Final fallback to pure random
             print("  Using final random fallback")
             fallback = nlmpy.random(nrows, ncols)
@@ -407,11 +406,11 @@ class NeutralLandscapeGenerator:
             print("Starting parameter sweep with AUTO-SELECTED algorithms...")
             print("Algorithm selection strategy:")
             print("  Moran's I < 0.2: 'random' algorithm")
-            print("  Moran's I 0.2-0.8: 'mpd' algorithm") 
+            print("  Moran's I 0.2-0.8: 'mpd' algorithm")
             print("  Moran's I > 0.8: 'randomClusterNN' algorithm")
         else:
             print(f"Starting parameter sweep with {algorithm} algorithm...")
-            
+
         print(f"AOI values: {aoi_values}")
         print(f"Canopy extents: {canopy_extents}")
         print(f"Moran's I values: {morans_i_values}")
@@ -513,7 +512,8 @@ class NeutralLandscapeGenerator:
         fig.suptitle('Multi-Algorithm Neutral Landscape Generation Results', fontsize=16)
 
         # 1. Success rate by parameters and algorithm
-        success_by_params = results_df.groupby(['aoi_m2', 'canopy_extent_target', 'morans_i_target'])['success'].mean().reset_index()
+        success_by_params = results_df.groupby(['aoi_m2', 'canopy_extent_target', 'morans_i_target'])[
+            'success'].mean().reset_index()
 
         ax1 = axes[0, 0]
         scatter = ax1.scatter(success_by_params['morans_i_target'],
@@ -531,9 +531,9 @@ class NeutralLandscapeGenerator:
         # Extract primary algorithm (before any fallback suffixes)
         results_df['primary_algorithm'] = results_df['algorithm'].str.split('_').str[0]
         algorithm_counts = results_df.groupby(['morans_i_target', 'primary_algorithm']).size().unstack(fill_value=0)
-        
-        algorithm_counts.plot(kind='bar', stacked=True, ax=ax2, 
-                             color=['lightcoral', 'lightblue', 'lightgreen'])
+
+        algorithm_counts.plot(kind='bar', stacked=True, ax=ax2,
+                              color=['lightcoral', 'lightblue', 'lightgreen'])
         ax2.set_xlabel("Target Moran's I")
         ax2.set_ylabel('Number of Landscapes')
         ax2.set_title('Algorithm Selection by Target Moran\'s I')
@@ -546,7 +546,7 @@ class NeutralLandscapeGenerator:
         for alg in results_df['primary_algorithm'].unique():
             alg_data = results_df[results_df['primary_algorithm'] == alg]
             ax3.scatter(alg_data['morans_i_target'], alg_data['morans_i_achieved'],
-                       alpha=0.6, label=alg, color=colors.get(alg, 'gray'))
+                        alpha=0.6, label=alg, color=colors.get(alg, 'gray'))
         ax3.plot([-1, 1], [-1, 1], 'k--', alpha=0.8, label='Perfect match')
         ax3.set_xlabel("Target Moran's I")
         ax3.set_ylabel("Achieved Moran's I")
@@ -579,18 +579,18 @@ class NeutralLandscapeGenerator:
         # 6. Success rate by algorithm
         ax6 = axes[2, 1]
         success_by_alg = results_df.groupby('primary_algorithm')['success'].mean()
-        bars = ax6.bar(success_by_alg.index, success_by_alg.values, 
+        bars = ax6.bar(success_by_alg.index, success_by_alg.values,
                        color=[colors.get(alg, 'gray') for alg in success_by_alg.index])
         ax6.set_xlabel('Algorithm')
         ax6.set_ylabel('Success Rate')
         ax6.set_title('Success Rate by Algorithm')
         ax6.set_ylim(0, 1)
-        
+
         # Add percentage labels on bars
         for bar, rate in zip(bars, success_by_alg.values):
             height = bar.get_height()
-            ax6.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{rate:.1%}', ha='center', va='bottom')
+            ax6.text(bar.get_x() + bar.get_width() / 2., height + 0.01,
+                     f'{rate:.1%}', ha='center', va='bottom')
 
         plt.tight_layout()
         plt.show()
@@ -685,7 +685,8 @@ class NeutralLandscapeGenerator:
         print(f"Sample points data exported successfully!")
         print(f"  File: {filename}")
         print(f"  Sample points: {len(final_df):,}")
-        print(f"  Landscape columns: {len([col for col in final_df.columns if col not in ['Sample_Point_ID', 'Sample_Point_X_Location', 'Sample_Point_Y_Location']])}")
+        print(
+            f"  Landscape columns: {len([col for col in final_df.columns if col not in ['Sample_Point_ID', 'Sample_Point_X_Location', 'Sample_Point_Y_Location']])}")
 
         return final_df
 
@@ -733,7 +734,6 @@ class NeutralLandscapeGenerator:
         summary_df = pd.DataFrame(summary_data)
         return summary_df
 
-
 # Example usage and parameter sweep
 if __name__ == "__main__":
     # Initialize generator with 100,000 sample points
@@ -744,7 +744,7 @@ if __name__ == "__main__":
     )
 
     # Define parameter ranges for your project
-    aoi_values = [200, 600, 4000]  # Area of interest in m²
+    aoi_values = [200, 600]  # Area of interest in m²
     canopy_extents = [0.2, 0.4, 0.6, 0.8]  # 20%, 40%, 60%, 80% canopy coverage
     morans_i_values = [-0.5, -0.2, 0.0, 0.2, 0.5, 0.8]  # Range of spatial autocorrelation
 
