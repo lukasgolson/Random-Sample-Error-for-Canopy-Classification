@@ -9,7 +9,7 @@ from pysal.lib import weights
 from scipy.optimize import minimize_scalar
 from scipy import ndimage
 from nlmpy import nlmpy
-from multiprocessing import Pool
+#from multiprocessing import Pool
 from tqdm import tqdm
 
 warnings.filterwarnings('ignore')
@@ -21,6 +21,7 @@ RANDOM_SEED = 42
 TOLERANCE = 0.025 # acceptable Moran's I difference
 MAX_ITERATIONS = 75 # max optimization iterations
 SAVE_LANDSCAPES = False # whether to save full landscapes
+USE_PARALLEL = False
 
 # Parameter sweeps
 AOI_VALUES = [200, 600] # AOI in m² - 200, 600, 4000
@@ -801,8 +802,18 @@ if __name__ == "__main__":
 
     # Run in parallel
     results = []
-    with Pool(processes=192) as pool:
-        for r in tqdm(pool.imap(generate_combination, args_list), total=len(args_list), desc="Generating landscapes"):
+    if USE_PARALLEL:
+        from multiprocessing import cpu_count
+
+        n_cpus = min(192, cpu_count())  # don’t exceed available cores
+        print(f"Running parallel parameter sweep with {len(args_list)} tasks using {n_cpus} CPUs...")
+        with Pool(processes=n_cpus) as pool:
+            for r in tqdm(pool.imap(generate_combination, args_list), total=len(args_list),
+                          desc="Generating landscapes"):
+                results.append(r)
+    else:
+        print(f"Running serial parameter sweep with {len(args_list)} tasks...")
+        for r in tqdm(map(generate_combination, args_list), total=len(args_list), desc="Generating landscapes"):
             results.append(r)
 
     # Convert results to DataFrame
