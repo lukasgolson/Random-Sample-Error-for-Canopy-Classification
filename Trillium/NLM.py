@@ -20,14 +20,14 @@ N_SAMPLE_POINTS = 100000     # number of sample points
 RANDOM_SEED = 42
 TOLERANCE = 0.025 # acceptable Moran's I difference
 MAX_ITERATIONS = 75 # max optimization iterations
-SAVE_LANDSCAPES = False # whether to save full landscapes
+SAVE_LANDSCAPES = True # whether to save full landscapes
 USE_PARALLEL = False
 
 # Parameter sweeps
 AOI_VALUES = [200, 600] # AOI in m² - 200, 600, 4000
-CANOPY_EXTENTS = np.round(np.arange(0, 1.01, 0.05), 2).tolist()  # canopy cover sweep
-MORANS_I_VALUES = np.round(np.arange(-.5, 1.01, 0.05), 2).tolist()  # Moran's I sweep
-N_REPLICATES = 200 # replicates per combo
+CANOPY_EXTENTS = np.round(np.arange(0, 1.01, 0.25), 2).tolist()  # canopy cover sweep
+MORANS_I_VALUES = np.round(np.arange(-.5, 1.01, 0.5), 2).tolist()  # Moran's I sweep
+N_REPLICATES = 20 # replicates per combo
 ALGORITHM = None # None = auto-select
 
 class NeutralLandscapeGenerator:
@@ -739,7 +739,7 @@ if __name__ == "__main__":
 
     # Function to generate a single combination + replicate
     def generate_combination(args):
-        aoi, canopy_extent, target_morans_i, replicate, gen = args
+        combination_id, aoi, canopy_extent, target_morans_i, replicate, gen = args
         start_time = time.time()
         nrows, ncols = gen.calculate_dimensions(aoi)
 
@@ -756,6 +756,7 @@ if __name__ == "__main__":
         sampling_stats = gen.calculate_sampling_statistics(sampled_values, true_canopy_proportion)
 
         record = {
+            'combination_id': combination_id,
             'replicate': replicate + 1,
             'aoi_m2': aoi,
             'nrows': nrows,
@@ -792,11 +793,12 @@ if __name__ == "__main__":
         return record
 
     # Prepare all combinations
-    args_list = [
-        (aoi, canopy_extent, target_morans_i, rep, generator)
-        for aoi, canopy_extent, target_morans_i in product(AOI_VALUES, CANOPY_EXTENTS, MORANS_I_VALUES)
-        for rep in range(N_REPLICATES)
-    ]
+    args_list = []
+    combination_counter = 0
+    for aoi, canopy_extent, target_morans_i in product(AOI_VALUES, CANOPY_EXTENTS, MORANS_I_VALUES):
+        combination_counter += 1
+        for rep in range(N_REPLICATES):
+            args_list.append((combination_counter, aoi, canopy_extent, target_morans_i, rep, generator))
 
     print(f"Running parallel parameter sweep with {len(args_list)} total tasks using 192 CPUs...")
 
