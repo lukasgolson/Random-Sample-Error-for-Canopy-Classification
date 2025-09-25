@@ -1,39 +1,51 @@
-# Main script to generate analysis grids for Meta's forest canopy height data.
-# Creates 600m, 1km, and 10km square grids filtered to tile boundaries.
-
-from functions import *
+# This is the file to run
 
 # =============================================================================
 # CONFIGURATION OPTIONS - Modify these as needed
 # =============================================================================
+#region
 
 # Select which processes to run
+USE_TEST_SETTINGS = True        # Set to True to run a test of the code using a larger BBOX and AOI
 EXPLORE_S3_STRUCTURE = False    # Set to True to explore S3 bucket structure
 SHOW_TILES_PLOT = False         # Set to True to visualize the tiles
-GENERATE_GRIDS = False          # Set to True to generate grids
+GENERATE_GRIDS = True           # Set to True to generate grids
 
 # Geographic settings
 BBOX = [-127, 24, -66.9, 49]   # Bounding box: [min_lon, min_lat, max_lon, max_lat]
 
 # Grid specifications
-GRID_SIZES = [1, 20, 35]
-# 1 km: Neighbourhood-sized grid
-# 20 km: City-sized grid
-# 35 km: Region-sized grid (counties, regions, upper tier municipalities)
+GRID_SIZES = [1, 20, 35] # Neighbourhood (1 km), city (20 km), and region (35 km) grids
+
+# Testing settings
+TEST_BBOX = [-80, 40, -70, 45]      # Small NY/New England region
+TEST_GRID_SIZES = [100]             # Large 100km grids for speed
 
 # S3 data source configuration
 BUCKET_NAME = 'dataforgood-fb-data'
 TILES_KEY = 'forests/v1/alsgedi_global_v6_float/tiles.geojson'
 
+#endregion
+
+from functions import *
+
 if __name__ == "__main__":
+
+    # Determine which settings to use
+    active_bbox = TEST_BBOX if USE_TEST_SETTINGS else BBOX
+    active_grid_sizes = TEST_GRID_SIZES if USE_TEST_SETTINGS else GRID_SIZES
+    mode = "TESTING" if USE_TEST_SETTINGS else "PRODUCTION"
+
     print("Access and Process Meta CHM Script")
     print("=" * 50)
     print(f"Target area: contiguous USA")
+    print(f"Bounding box: {active_bbox}")
     print(f"Configuration:")
+    print(f"  - Test run: {USE_TEST_SETTINGS}")
     print(f"  - Explore S3: {EXPLORE_S3_STRUCTURE}")
     print(f"  - Show tiles plot: {SHOW_TILES_PLOT}")
     print(f"  - Generate grids: {GENERATE_GRIDS}")
-    print(f"  - Grid sizes: {GRID_SIZES} km")
+    print(f"  - Grid sizes: {active_grid_sizes} km")
     print("=" * 50)
     print("\n")
 
@@ -52,7 +64,7 @@ if __name__ == "__main__":
         tiles_gdf = download_tiles_geojson(
             BUCKET_NAME,
             TILES_KEY,
-            bbox=BBOX,
+            bbox=active_bbox,
             show_plot=SHOW_TILES_PLOT
         )
 
@@ -60,7 +72,7 @@ if __name__ == "__main__":
             print("❌ Failed to load tiles data. Exiting.")
             success = False
         else:
-            print(f"✅ Tiles loaded successfully")
+            print(f"\n✅ Tiles loaded successfully")
             print(f"   Tiles extent: {tiles_gdf.total_bounds}")
             print(f"   Number of tiles: {len(tiles_gdf)}")
 
@@ -70,8 +82,8 @@ if __name__ == "__main__":
 
         # Create config for grid generation
         grid_config = {
-            'bbox': BBOX,
-            'grid_sizes': GRID_SIZES,
+            'bbox': active_bbox,
+            'grid_sizes': active_grid_sizes,
             'generate_grids': True  # Force True for this step
         }
 
@@ -80,7 +92,7 @@ if __name__ == "__main__":
         successful_grids = []
         bounds = tiles_gdf.total_bounds
 
-        for cell_size_km in GRID_SIZES:
+        for cell_size_km in active_grid_sizes:
             # Convert km to meters for internal calculations
             cell_size_meters = int(cell_size_km * 1000)
             grid_label = f"{cell_size_km}km"
@@ -130,15 +142,15 @@ if __name__ == "__main__":
             tiles_gdf = download_tiles_geojson(
                 BUCKET_NAME,
                 TILES_KEY,
-                bbox=BBOX,
+                bbox=active_bbox,
                 show_plot=False  # Don't show plot here since SHOW_TILES_PLOT was False
             )
 
         if tiles_gdf is not None:
             print(f"\n🔬 RUNNING ANALYSIS...")
             config = {
-                'bbox': BBOX,
-                'grid_sizes': GRID_SIZES,
+                'bbox': active_bbox,
+                'grid_sizes': active_grid_sizes,
                 'generate_grids': GENERATE_GRIDS
             }
             analysis_success = placeholder_analysis(tiles_gdf, config)
