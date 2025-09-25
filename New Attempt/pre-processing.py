@@ -18,15 +18,12 @@ BBOX = [-127, 24, -66.9, 49]   # Bounding box: [min_lon, min_lat, max_lon, max_l
 TEST_BBOX = [-80, 40, -70, 45]      # Small NY/New England region
 
 # Grid specifications
-GRID_SIZES = [1, 20, 35] # Neighbourhood (1 km), city (20 km), and region (35 km) grids
+GRID_SIZES = [1, 20, 40] # Neighbourhood (1 km), city (20 km), and region (35 km) grids
 TEST_GRID_SIZES = [100]             # Large 100km grids for speed
 
 # Sample point specifications
-SAMPLE_POINTS_CONFIG = {
-    1: 50000,    # 50k points for 1km grids
-    20: 100000,  # 100k points for 20km grids
-    35: 100000   # 100k points for 35km grids
-}
+base_points = 1000 # Number of points per 1 sq km area
+SAMPLE_POINTS_CONFIG = {1: base_points, 20: (20*20*base_points), 40: (40*40*base_points), 100: base_points}
 
 # S3 data source configuration
 BUCKET_NAME = 'dataforgood-fb-data'
