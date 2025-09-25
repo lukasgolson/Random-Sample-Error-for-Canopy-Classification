@@ -71,7 +71,8 @@ Directories in s3://dataforgood-fb-data/forests/v1/alsgedi_global_v6_float/
 
 We are interested in the tiles.geojson so that we can first identify what tiles cover Canada and the United States.
 
-The next code segment downloads and displays the geojson file.
+The next code segment downloads and displays the geojson file. A limiting latitude and longitude bounding
+box is used to show tiles only covering Canada and the United States (see in-line comment).
 
 """
 
