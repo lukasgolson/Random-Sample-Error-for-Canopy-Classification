@@ -1,4 +1,4 @@
-# This is the file to run
+# This is the file that processes the CHM files
 
 # =============================================================================
 # CONFIGURATION OPTIONS - Modify these as needed
@@ -8,19 +8,25 @@
 # Select which processes to run
 USE_TEST_SETTINGS = True        # Set to True to run a test of the code using a larger BBOX and AOI
 EXPLORE_S3_STRUCTURE = False    # Set to True to explore S3 bucket structure
+CHECK_CHM_FILE_SIZES = True     # Set to True to analyze CHM file sizes
 SHOW_TILES_PLOT = False         # Set to True to visualize the tiles
 GENERATE_GRIDS = False           # Set to True to generate grids
-CHECK_CHM_FILE_SIZES = True     # Set to True to analyze CHM file sizes
+GENERATE_SAMPLE_POINTS = True   # Set to True to generate systematic sample points
 
 # Geographic settings
 BBOX = [-127, 24, -66.9, 49]   # Bounding box: [min_lon, min_lat, max_lon, max_lat]
+TEST_BBOX = [-80, 40, -70, 45]      # Small NY/New England region
 
 # Grid specifications
 GRID_SIZES = [1, 20, 35] # Neighbourhood (1 km), city (20 km), and region (35 km) grids
-
-# Testing settings
-TEST_BBOX = [-80, 40, -70, 45]      # Small NY/New England region
 TEST_GRID_SIZES = [100]             # Large 100km grids for speed
+
+# Sample point specifications
+SAMPLE_POINTS_CONFIG = {
+    1: 50000,    # 50k points for 1km grids
+    20: 100000,  # 100k points for 20km grids
+    35: 100000   # 100k points for 35km grids
+}
 
 # S3 data source configuration
 BUCKET_NAME = 'dataforgood-fb-data'
@@ -171,6 +177,21 @@ if __name__ == "__main__":
             print("❌ Could not load tiles for analysis")
             success = False
 
+    # Step 6: Generate sample points if requested
+    if GENERATE_SAMPLE_POINTS:
+        print(f"\n🎯 GENERATING SAMPLE POINTS...")
+
+        # Only process grids that exist for current mode
+        active_sample_config = {}
+        for size in active_grid_sizes:
+            if size in SAMPLE_POINTS_CONFIG:
+                active_sample_config[size] = SAMPLE_POINTS_CONFIG[size]
+
+        if active_sample_config:
+            sample_results = generate_sample_points_for_grids(active_sample_config, active_bbox)
+        else:
+            print("   No sample point configuration found for active grid sizes")
+
     # Final summary
     print(f"\n{'📋 EXECUTION SUMMARY':=^60}")
     operations = []
@@ -194,3 +215,7 @@ if __name__ == "__main__":
 
     # Exit with appropriate code
     exit(0 if success else 1)
+
+# Notes:
+# 1. need to add a tiles.geojson reference to associate one or more quadkeys with
+# the grid cells.
