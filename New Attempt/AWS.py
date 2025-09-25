@@ -76,6 +76,7 @@ box is used to show tiles only covering Canada and the United States (see in-lin
 
 """
 
+print(f"\nLoading and displaying tiles.geojson...")
 def download_and_display_geojson(bucket_name, key, bbox=None):
     # Create S3 client for unsigned requests
     s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
@@ -88,10 +89,11 @@ def download_and_display_geojson(bucket_name, key, bbox=None):
         # Read with geopandas directly from memory
         gdf = gpd.read_file(io.BytesIO(geojson_data))
 
-        print(f"Successfully loaded {key}")
-        print(f"Original shape: {gdf.shape}")
-        print(f"CRS: {gdf.crs}")
-        print(f"Columns: {list(gdf.columns)}")
+        print(f"  Successfully loaded {key}")
+        print(f"    File Information:")
+        print(f"      Original shape: {gdf.shape}")
+        print(f"      CRS: {gdf.crs}")
+        print(f"      Columns: {list(gdf.columns)}")
 
         # Apply bounding box filter if provided
         if bbox is not None:
@@ -103,8 +105,8 @@ def download_and_display_geojson(bucket_name, key, bbox=None):
             # Filter tiles that intersect with the bounding box
             gdf_filtered = gdf.cx[min_lon:max_lon, min_lat:max_lat]
 
-            print(f"Filtered shape: {gdf_filtered.shape}")
-            print(f"Removed {gdf.shape[0] - gdf_filtered.shape[0]} tiles outside bounding box")
+            print(f"Number of tiles in AOI: {gdf.shape[0]}")
+            print(f"Number of tiles outside AOI: {gdf.shape[0] - gdf_filtered.shape[0]}")
 
             gdf = gdf_filtered
 
