@@ -1,4 +1,4 @@
-# Utility functions for working with Meta's forest canopy height data and generating analysis grids.
+# This is the file that stores functions
 
 """
 Functions:
@@ -302,9 +302,9 @@ def _get_filename(cell_size):
     else:
         # Fallback for other sizes
         if cell_size < 1000:
-            return f"grid_{cell_size / 1000:.1f}km.gpkg"
+            return f"grid_{cell_size/1000:.1f}km.gpkg"
         else:
-            return f"grid_{cell_size // 1000}km.gpkg"
+            return f"grid_{cell_size//1000}km.gpkg"
 
 
 def _get_grid_label(cell_size):
@@ -318,9 +318,9 @@ def _get_grid_label(cell_size):
     else:
         # Fallback for other sizes
         if cell_size < 1000:
-            return f"{cell_size / 1000:.1f}km"
+            return f"{cell_size/1000:.1f}km"
         else:
-            return f"{cell_size // 1000}km"
+            return f"{cell_size//1000}km"
 
 
 def run_grid_generation(config):
@@ -412,6 +412,7 @@ def run_grid_generation(config):
         return False
 
     return True
+
 
 def placeholder_analysis(tiles_gdf, config):
     print("☀️ Hello, World!")
