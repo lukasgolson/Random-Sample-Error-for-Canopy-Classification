@@ -121,12 +121,12 @@ def download_and_display_geojson(bucket_name, key, bbox=None):
             min_lon, min_lat, max_lon, max_lat = bbox
             from matplotlib.patches import Rectangle
             rect = Rectangle((min_lon, min_lat), max_lon - min_lon, max_lat - min_lat,
-                             linewidth=2, edgecolor='red', facecolor='none', linestyle='--')
+                             linewidth=3, edgecolor='red', facecolor='none', linestyle='-')
             ax.add_patch(rect)
 
             # Add red label in bottom-left corner
-            ax.text(min_lon+10, min_lat, "AOI Bounding Box",
-                    fontsize=16, color='red', ha='left', va='bottom')
+            ax.text(min_lon+5, min_lat+.5, "AOI Bounding Box",
+                    fontsize=20, color='red', ha='left', va='bottom')
 
         # Axis labels with larger font
         ax.set_xlabel('Longitude', fontsize=20)
