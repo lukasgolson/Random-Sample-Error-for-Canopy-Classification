@@ -76,49 +76,103 @@ box is used to show tiles only covering Canada and the United States (see in-lin
 
 """
 
-def download_and_display_geojson(bucket_name, key):
+def download_and_display_geojson(bucket_name, key, bbox=None):
     # Create S3 client for unsigned requests
     s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
-    
+
     try:
         # Download the file to memory
         response = s3.get_object(Bucket=bucket_name, Key=key)
         geojson_data = response['Body'].read()
-        
+
         # Read with geopandas directly from memory
         gdf = gpd.read_file(io.BytesIO(geojson_data))
-        
+
         print(f"Successfully loaded {key}")
-        print(f"Shape: {gdf.shape}")
+        print(f"Original shape: {gdf.shape}")
         print(f"CRS: {gdf.crs}")
         print(f"Columns: {list(gdf.columns)}")
-        
+
+        # Apply bounding box filter if provided
+        if bbox is not None:
+            min_lon, min_lat, max_lon, max_lat = bbox
+            print(f"\nApplying bounding box filter:")
+            print(f"Longitude: {min_lon} to {max_lon}")
+            print(f"Latitude: {min_lat} to {max_lat}")
+
+            # Filter tiles that intersect with the bounding box
+            gdf_filtered = gdf.cx[min_lon:max_lon, min_lat:max_lat]
+
+            print(f"Filtered shape: {gdf_filtered.shape}")
+            print(f"Removed {gdf.shape[0] - gdf_filtered.shape[0]} tiles outside bounding box")
+
+            gdf = gdf_filtered
+
         # Display basic info
         print("\nFirst few rows:")
         print(gdf.head())
-        
+
         # Plot the tiles
-        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-        gdf.plot(ax=ax, facecolor='none', edgecolor='blue', alpha=0.7)
-        plt.title('Forest Canopy Height Model Tiles')
+        fig, ax = plt.subplots(1, 1, figsize=(15, 10))
+        gdf.plot(ax=ax, facecolor='none', edgecolor='blue', alpha=0.7, linewidth=0.5)
+
+        # Add bounding box rectangle if specified
+        if bbox is not None:
+            min_lon, min_lat, max_lon, max_lat = bbox
+            from matplotlib.patches import Rectangle
+            rect = Rectangle((min_lon, min_lat), max_lon - min_lon, max_lat - min_lat,
+                             linewidth=2, edgecolor='red', facecolor='none', linestyle='--')
+            ax.add_patch(rect)
+            plt.title('Forest Canopy Height Model Tiles - Canada & United States')
+        else:
+            plt.title('Forest Canopy Height Model Tiles - Global')
+
         plt.xlabel('Longitude')
         plt.ylabel('Latitude')
         plt.grid(True, alpha=0.3)
+
+        # Set reasonable axis limits for North America if bbox is provided
+        if bbox is not None:
+            ax.set_xlim(min_lon - 5, max_lon + 5)
+            ax.set_ylim(min_lat - 2, max_lat + 2)
+
+        plt.tight_layout()
         plt.show()
-        
+
         return gdf
-        
+
     except Exception as e:
         print(f"Error downloading/displaying file: {e}")
         return None
 
-# Download and display the tiles
+
+# Define bounding box for Canada and United States
+# Coordinates: [min_longitude, min_latitude, max_longitude, max_latitude]
+canada_usa_bbox = [-170, 25, -50, 72]  # Covers continental US, Alaska, and Canada
+
+# Download and display the tiles with bounding box filter
 tiles_gdf = download_and_display_geojson(
-    'dataforgood-fb-data', 
-    'forests/v1/alsgedi_global_v6_float/tiles.geojson'
+    'dataforgood-fb-data',
+    'forests/v1/alsgedi_global_v6_float/tiles.geojson',
+    bbox=canada_usa_bbox
 )
 
-# If you want to save it locally
-if tiles_gdf is not None:
-    tiles_gdf.to_file('tiles.geojson', driver='GeoJSON')
-    print("Saved tiles.geojson locally")
+# Set to True if you want to save the filtered tiles locally, False otherwise
+save_locally = True
+
+# Save the filtered tiles locally if requested
+if tiles_gdf is not None and save_locally:
+    tiles_gdf.to_file('tiles_canada_usa.geojson', driver='GeoJSON')
+    print("Saved filtered tiles for Canada & USA as 'tiles_canada_usa.geojson'")
+
+    # Print some statistics about the filtered tiles
+    print(f"\nFiltered dataset statistics:")
+    print(f"Number of tiles covering Canada & USA: {len(tiles_gdf)}")
+    if 'quadkey' in tiles_gdf.columns:
+        print(f"QuadKey range: {tiles_gdf['quadkey'].min()} to {tiles_gdf['quadkey'].max()}")
+
+    # Show the geographic extent of the filtered tiles
+    bounds = tiles_gdf.total_bounds
+    print(f"Geographic extent:")
+    print(f"  Longitude: {bounds[0]:.2f} to {bounds[2]:.2f}")
+    print(f"  Latitude: {bounds[1]:.2f} to {bounds[3]:.2f}")
