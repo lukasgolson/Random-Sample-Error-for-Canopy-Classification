@@ -1,18 +1,13 @@
+# Utility functions for working with Meta's forest canopy height data and generating analysis grids.
+
 """
-Functions.py
-====================
-
-Utility functions for working with Meta's forest canopy height data and generating analysis grids.
-
 Functions:
 - list_s3_directories(): Explore S3 bucket structure
 - download_tiles_geojson(): Download and filter tiles from S3
 - create_grid(): Generate square grid cells of specified size
 - spatial_filter_grid(): Filter grid cells to those within tile boundaries
 - save_grid(): Save grid to GeoPackage format
-
-Author: Alexander Martin & Lukas Olson
-Date: October 2025
+- run_grid_generation(): Main execution function (called from main.py)
 """
 
 import boto3
@@ -24,6 +19,7 @@ from shapely.geometry import Polygon
 from tqdm import tqdm
 import pandas as pd
 import io
+
 
 def list_s3_directories(bucket_name, prefix=''):
     """
@@ -70,6 +66,7 @@ def list_s3_directories(bucket_name, prefix=''):
 
     except Exception as e:
         print(f"Error: {e}")
+
 
 def download_tiles_geojson(bucket_name, key, bbox=None, show_plot=False):
     """
@@ -120,6 +117,7 @@ def download_tiles_geojson(bucket_name, key, bbox=None, show_plot=False):
         print(f"Error downloading tiles: {e}")
         return None
 
+
 def _plot_tiles(gdf, bbox=None):
     """
     Helper function to plot tiles with optional bounding box.
@@ -153,6 +151,7 @@ def _plot_tiles(gdf, bbox=None):
     plt.grid(True, alpha=0.5)
     plt.tight_layout()
     plt.show()
+
 
 def create_grid(bounds, cell_size_meters, crs='EPSG:4326'):
     """
@@ -201,7 +200,7 @@ def create_grid(bounds, cell_size_meters, crs='EPSG:4326'):
                 (x_coords[i], y_coords[j + 1])
             ])
             polygons.append(poly)
-            grid_ids.append(f"{cell_size_meters}m_{i}_{j}")
+            grid_ids.append(f"{cell_size_meters // 1000}km_{i}_{j}")
 
     # Create GeoDataFrame in projected CRS
     grid_gdf = gpd.GeoDataFrame({
@@ -214,6 +213,7 @@ def create_grid(bounds, cell_size_meters, crs='EPSG:4326'):
     grid_gdf = grid_gdf.to_crs(crs)
 
     return grid_gdf
+
 
 def spatial_filter_grid(grid_gdf, tiles_gdf):
     """
@@ -248,6 +248,7 @@ def spatial_filter_grid(grid_gdf, tiles_gdf):
 
     return filtered_grid
 
+
 def save_grid(grid_gdf, filename, cell_size):
     """
     Save grid to GeoPackage format with metadata.
@@ -267,13 +268,151 @@ def save_grid(grid_gdf, filename, cell_size):
 
     # Print summary statistics
     total_area_km2 = (grid_gdf['area_m2'].sum()) / 1e6
-    print(f"Summary for {cell_size}m grid:")
+    print(f"Summary for {cell_size // 1000}km grid:")
     print(f"  Total cells: {len(grid_gdf):,}")
     print(f"  Total area: {total_area_km2:,.1f} km²")
     print(f"  File saved: {filename}")
     print()
 
-# Package metadata
-__version__ = "1.0.0"
-__author__ = "Alexander Martin"
-__description__ = "Utilities for Meta forest data analysis and grid generation"
+
+def _get_filename_from_km(cell_size_km):
+    """Generate appropriate filename based on cell size in km"""
+    if cell_size_km == 0.6:
+        return "grid_0.6km.gpkg"
+    elif cell_size_km == 1:
+        return "grid_1km.gpkg"
+    elif cell_size_km == 10:
+        return "grid_10km.gpkg"
+    else:
+        # Fallback for other sizes
+        if cell_size_km < 1:
+            return f"grid_{cell_size_km:.1f}km.gpkg"
+        else:
+            return f"grid_{int(cell_size_km)}km.gpkg"
+
+
+def _get_filename(cell_size):
+    """Generate appropriate filename based on cell size in meters (legacy function)"""
+    if cell_size == 600:
+        return "grid_0.6km.gpkg"
+    elif cell_size == 1000:
+        return "grid_1km.gpkg"
+    elif cell_size == 10000:
+        return "grid_10km.gpkg"
+    else:
+        # Fallback for other sizes
+        if cell_size < 1000:
+            return f"grid_{cell_size / 1000:.1f}km.gpkg"
+        else:
+            return f"grid_{cell_size // 1000}km.gpkg"
+
+
+def _get_grid_label(cell_size):
+    """Generate appropriate grid label for display based on meters (legacy function)"""
+    if cell_size == 600:
+        return "0.6km"
+    elif cell_size == 1000:
+        return "1km"
+    elif cell_size == 10000:
+        return "10km"
+    else:
+        # Fallback for other sizes
+        if cell_size < 1000:
+            return f"{cell_size / 1000:.1f}km"
+        else:
+            return f"{cell_size // 1000}km"
+
+
+def run_grid_generation(config):
+    """
+    Main function to generate all grids using provided configuration.
+
+    Parameters:
+    config (dict): Configuration dictionary with all settings
+                   - grid_sizes should be in kilometers (e.g., [0.6, 1, 10])
+
+    Returns:
+    bool: True if successful, False otherwise
+    """
+
+    print("Grid Cell Generation Script")
+    print("=" * 50)
+    print(f"Target area: USA")
+    print(f"Bounding box: {config['bbox']}")
+    print(f"Grid sizes: {config['grid_sizes']} km")
+    print("=" * 50)
+
+    # Optional: Explore S3 bucket structure
+    if config['explore_s3_structure']:
+        print("\n🔍 EXPLORING S3 BUCKET STRUCTURE...")
+        list_s3_directories(config['bucket_name'], 'forests/v1/alsgedi_global_v6_float/')
+        print("\n" + "=" * 60 + "\n")
+
+    # Step 1: Download and filter tiles
+    print("\n📥 STEP 1: LOADING TILES DATA...")
+    tiles_gdf = download_tiles_geojson(
+        config['bucket_name'],
+        config['tiles_key'],
+        bbox=config['bbox'],
+        show_plot=config['show_tiles_plot']
+    )
+
+    if tiles_gdf is None:
+        print("❌ Failed to load tiles data. Exiting.")
+        return False
+
+    # Get overall bounds for grid creation
+    bounds = tiles_gdf.total_bounds
+    print(f"\n✅ Tiles loaded successfully")
+    print(f"   Tiles extent: {bounds}")
+    print(f"   Number of tiles: {len(tiles_gdf)}")
+
+    # Step 2-4: Process each grid size
+    successful_grids = []
+
+    for cell_size_km in config['grid_sizes']:
+        # Convert km to meters for internal calculations
+        cell_size_meters = int(cell_size_km * 1000)
+        grid_label = f"{cell_size_km}km"
+
+        print(f"\n{'🔲 PROCESSING ' + grid_label + ' GRID':=^60}")
+
+        try:
+            # Create grid
+            print(f"\n⚙️  Step 2: Creating {grid_label} grid...")
+            grid = create_grid(bounds, cell_size_meters, crs=tiles_gdf.crs)
+
+            # Spatial filter
+            print(f"\n🔍 Step 3: Spatially filtering {grid_label} grid...")
+            filtered_grid = spatial_filter_grid(grid, tiles_gdf)
+
+            # Save grid
+            print(f"\n💾 Step 4: Saving {grid_label} grid...")
+            filename = _get_filename_from_km(cell_size_km)
+            save_grid(filtered_grid, filename, cell_size_meters)
+
+            successful_grids.append(filename)
+            print(f"✅ {grid_label} grid completed successfully!")
+
+            # Clear memory
+            del grid, filtered_grid
+
+        except Exception as e:
+            print(f"❌ Error processing {grid_label} grid: {e}")
+            continue
+
+    # Final summary
+    print(f"\n{'🎉 GRID GENERATION COMPLETE':=^60}")
+    if successful_grids:
+        print("✅ Successfully created grids:")
+        for filename in successful_grids:
+            print(f"   📄 {filename}")
+    else:
+        print("❌ No grids were created successfully")
+        return False
+
+    return True
+
+def placeholder_analysis(tiles_gdf, config):
+    print("☀️ Hello, World!")
+    return True
