@@ -9,7 +9,8 @@
 USE_TEST_SETTINGS = True        # Set to True to run a test of the code using a larger BBOX and AOI
 EXPLORE_S3_STRUCTURE = False    # Set to True to explore S3 bucket structure
 SHOW_TILES_PLOT = False         # Set to True to visualize the tiles
-GENERATE_GRIDS = True           # Set to True to generate grids
+GENERATE_GRIDS = False           # Set to True to generate grids
+CHECK_CHM_FILE_SIZES = True     # Set to True to analyze CHM file sizes
 
 # Geographic settings
 BBOX = [-127, 24, -66.9, 49]   # Bounding box: [min_lon, min_lat, max_lon, max_lat]
@@ -76,7 +77,18 @@ if __name__ == "__main__":
             print(f"   Tiles extent: {tiles_gdf.total_bounds}")
             print(f"   Number of tiles: {len(tiles_gdf)}")
 
-    # Step 3: Generate grids if requested
+    # Step 3: Optional CHM file size check
+    if CHECK_CHM_FILE_SIZES and tiles_gdf is not None:
+        print(f"\n📊 CHECKING CHM FILE SIZES...")
+        from functions import check_chm_file_sizes
+
+        file_stats = check_chm_file_sizes(
+            tiles_gdf,
+            BUCKET_NAME,
+            sample_size=50
+        )
+
+    # Step 4: Generate grids if requested
     if GENERATE_GRIDS and success and tiles_gdf is not None:
         print(f"\n🔲 GENERATING GRIDS...")
 
@@ -134,7 +146,7 @@ if __name__ == "__main__":
             print("❌ No grids were created successfully")
             success = False
 
-    # Step 4: Run analysis if grids are disabled
+    # Step 5: Run analysis if grids are disabled
     if not GENERATE_GRIDS:
         # If we haven't loaded tiles yet (when all flags are False), load them now for analysis
         if tiles_gdf is None:
