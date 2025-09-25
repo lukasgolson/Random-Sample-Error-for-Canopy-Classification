@@ -414,6 +414,107 @@ def run_grid_generation(config):
     return True
 
 
+def check_chm_file_sizes(tiles_gdf, bucket_name, sample_size=50):
+    """
+    Check average file size of CHM GeoTIFF files corresponding to tiles.
+
+    Parameters:
+    tiles_gdf (gpd.GeoDataFrame): Tiles data with quadkey/tile column
+    bucket_name (str): S3 bucket name
+    sample_size (int): Number of files to sample for size estimation
+
+    Returns:
+    dict: File size statistics
+    """
+    import random
+
+    s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
+
+    print(f"🔍 CHECKING CHM FILE SIZES...")
+
+    # Get tile identifiers - check what column contains the quadkey
+    if 'tile' in tiles_gdf.columns:
+        tile_ids = tiles_gdf['tile'].tolist()
+        id_column = 'tile'
+    elif 'quadkey' in tiles_gdf.columns:
+        tile_ids = tiles_gdf['quadkey'].tolist()
+        id_column = 'quadkey'
+    else:
+        print("❌ Could not find 'tile' or 'quadkey' column in tiles data")
+        return None
+
+    print(f"   Found {len(tile_ids)} tiles using column '{id_column}'")
+
+    # Sample random tiles to check
+    sample_tiles = random.sample(tile_ids, min(sample_size, len(tile_ids)))
+    print(f"   Sampling {len(sample_tiles)} tiles for file size analysis...")
+
+    file_sizes = []
+    found_files = 0
+    missing_files = 0
+
+    for i, tile_id in enumerate(sample_tiles):
+        if i % 10 == 0:  # Progress indicator
+            print(f"   Progress: {i + 1}/{len(sample_tiles)}")
+
+        # Construct S3 key for CHM file
+        chm_key = f'forests/v1/alsgedi_global_v6_float/chm/{tile_id}.tif'
+
+        try:
+            # Get object metadata (HEAD request - doesn't download file)
+            response = s3.head_object(Bucket=bucket_name, Key=chm_key)
+            file_size_bytes = response['ContentLength']
+            file_sizes.append(file_size_bytes)
+            found_files += 1
+
+        except Exception as e:
+            missing_files += 1
+            if missing_files <= 5:  # Only show first few missing files
+                print(f"   ⚠️  Missing: {chm_key}")
+
+    if not file_sizes:
+        print("❌ No CHM files found")
+        return None
+
+    # Calculate statistics
+    avg_size_bytes = sum(file_sizes) / len(file_sizes)
+    min_size_bytes = min(file_sizes)
+    max_size_bytes = max(file_sizes)
+    total_estimated_gb = (avg_size_bytes * len(tile_ids)) / (1024 ** 3)
+
+    # Convert to human readable
+    def bytes_to_human(bytes_val):
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if bytes_val < 1024.0:
+                return f"{bytes_val:.1f} {unit}"
+            bytes_val /= 1024.0
+        return f"{bytes_val:.1f} TB"
+
+    stats = {
+        'sample_size': len(sample_tiles),
+        'found_files': found_files,
+        'missing_files': missing_files,
+        'avg_size_bytes': avg_size_bytes,
+        'avg_size_human': bytes_to_human(avg_size_bytes),
+        'min_size_human': bytes_to_human(min_size_bytes),
+        'max_size_human': bytes_to_human(max_size_bytes),
+        'total_tiles': len(tile_ids),
+        'estimated_total_size_gb': total_estimated_gb
+    }
+
+    # Print results
+    print(f"\n📊 CHM FILE SIZE ANALYSIS:")
+    print(f"   Sample analyzed: {found_files}/{len(sample_tiles)} files")
+    print(f"   Missing files: {missing_files}")
+    print(f"   Average file size: {stats['avg_size_human']}")
+    print(f"   Size range: {stats['min_size_human']} - {stats['max_size_human']}")
+    print(f"   Total tiles in dataset: {stats['total_tiles']:,}")
+    print(f"   Estimated total size: {stats['estimated_total_size_gb']:.1f} GB")
+    print(f"   Storage space needed: ~{stats['estimated_total_size_gb'] * 1.2:.1f} GB (with 20% buffer)")
+
+    return stats
+
+
 def placeholder_analysis(tiles_gdf, config):
     print("☀️ Hello, World!")
     return True
