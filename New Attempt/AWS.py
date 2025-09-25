@@ -74,6 +74,8 @@ We are interested in the tiles.geojson so that we can first identify what tiles 
 The next code segment downloads and displays the geojson file. A limiting latitude and longitude bounding
 box is used to show tiles only covering Canada and the United States (see in-line comment).
 
+The code identifies the QuadKeys from column tile.
+
 """
 
 print(f"\nLoading and displaying tiles.geojson...")
@@ -110,9 +112,10 @@ def download_and_display_geojson(bucket_name, key, bbox=None):
 
             gdf = gdf_filtered
 
-        # Display basic info
-        print("\nFirst few rows:")
-        print(gdf.head())
+        # Calculate average polygon size in sq. metres
+        gdf_projected = gdf.to_crs(epsg=5070)  # Albers projection for the US
+        avg_area = gdf_projected.area.mean()
+        print(f"Average polygon size: {avg_area:,.2f} m²")
 
         # Plot the tiles
         fig, ax = plt.subplots(1, 1, figsize=(15, 10))
@@ -157,18 +160,15 @@ def download_and_display_geojson(bucket_name, key, bbox=None):
         print(f"Error downloading/displaying file: {e}")
         return None
 
-# Define bounding box for Canada and United States
+# Define bounding box
 # Coordinates: [min_longitude, min_latitude, max_longitude, max_latitude]
-canada_usa_bbox = [-170, # approximate westernmost longitude of Alaska
-                   24, # approximate southernmost latitude of Florida
-                   -50, # approximate easternmost longitude of Newfoundland
-                   65]  # Excludes areas generally north of the Tree Line
+bbox = [-128, 24, -66.9, 49]
 
 # Download and display the tiles with bounding box filter
 tiles_gdf = download_and_display_geojson(
     'dataforgood-fb-data',
     'forests/v1/alsgedi_global_v6_float/tiles.geojson',
-    bbox=canada_usa_bbox
+    bbox=bbox
 )
 
 # Set to True if you want to save the filtered tiles locally, False otherwise
@@ -190,3 +190,8 @@ if tiles_gdf is not None and save_locally:
     print(f"Geographic extent:")
     print(f"  Longitude: {bounds[0]:.2f} to {bounds[2]:.2f}")
     print(f"  Latitude: {bounds[1]:.2f} to {bounds[3]:.2f}")
+
+"""
+
+
+"""
