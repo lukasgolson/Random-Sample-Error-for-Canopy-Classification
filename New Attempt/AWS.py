@@ -1,10 +1,14 @@
 # Code to access Meta files using AWS CLI. Requires installation of AWS CLI
 
-""
-This block of code prints a list of the available files. The folder contains the tiles.geojson file and the three sub-folders: chm, metadata, and msk. 
-tiles.geojson file is a vector layer with polygons showing tile locations. The polygon identifies the 
-QuadKey in the attribute table, which corresponds to the geotiff files in the chm sub-folder. 
-""
+"""
+
+This code lists the available files in the folder, which contains:
+1. tiles.geojson: A vector layer with polygons showing tile locations
+2. Three sub-folders: chm, metadata, and msk
+
+The tiles.geojson file includes QuadKey identifiers in the attribute table that correspond to the geotiff files stored in the chm sub-folder.
+
+"""
 
 import boto3
 from botocore import UNSIGNED
