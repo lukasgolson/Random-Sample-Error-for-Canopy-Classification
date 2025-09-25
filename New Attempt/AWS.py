@@ -123,13 +123,23 @@ def download_and_display_geojson(bucket_name, key, bbox=None):
             rect = Rectangle((min_lon, min_lat), max_lon - min_lon, max_lat - min_lat,
                              linewidth=2, edgecolor='red', facecolor='none', linestyle='--')
             ax.add_patch(rect)
-            plt.title('Forest Canopy Height Model Tiles - Canada & United States')
-        else:
-            plt.title('Forest Canopy Height Model Tiles - Global')
 
-        plt.xlabel('Longitude')
-        plt.ylabel('Latitude')
-        plt.grid(True, alpha=0.3)
+            # Add red label in bottom-left corner
+            ax.text(min_lon+10, min_lat, "AOI Bounding Box",
+                    fontsize=16, color='red', ha='left', va='bottom')
+
+        # Axis labels with larger font
+        ax.set_xlabel('Longitude', fontsize=20)
+        ax.set_ylabel('Latitude', fontsize=20)
+
+        # Increase tick frequency to every 10 units
+        ax.xaxis.set_major_locator(plt.MultipleLocator(10))
+        ax.yaxis.set_major_locator(plt.MultipleLocator(5))
+
+        # Increase tick label size
+        ax.tick_params(axis='both', labelsize=18)
+
+        plt.grid(True, alpha=0.5)
 
         # Set reasonable axis limits for North America if bbox is provided
         if bbox is not None:
@@ -145,10 +155,12 @@ def download_and_display_geojson(bucket_name, key, bbox=None):
         print(f"Error downloading/displaying file: {e}")
         return None
 
-
 # Define bounding box for Canada and United States
 # Coordinates: [min_longitude, min_latitude, max_longitude, max_latitude]
-canada_usa_bbox = [-170, 25, -50, 72]  # Covers continental US, Alaska, and Canada
+canada_usa_bbox = [-170, # approximate westernmost longitude of Alaska
+                   24, # approximate southernmost latitude of Florida
+                   -50, # approximate easternmost longitude of Newfoundland
+                   65]  # Excludes areas generally north of the Tree Line
 
 # Download and display the tiles with bounding box filter
 tiles_gdf = download_and_display_geojson(
@@ -158,7 +170,7 @@ tiles_gdf = download_and_display_geojson(
 )
 
 # Set to True if you want to save the filtered tiles locally, False otherwise
-save_locally = True
+save_locally = False
 
 # Save the filtered tiles locally if requested
 if tiles_gdf is not None and save_locally:
