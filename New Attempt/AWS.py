@@ -99,13 +99,13 @@ def download_and_display_geojson(bucket_name, key, bbox=None):
         if bbox is not None:
             min_lon, min_lat, max_lon, max_lat = bbox
             print(f"\nApplying bounding box filter:")
-            print(f"Longitude: {min_lon} to {max_lon}")
-            print(f"Latitude: {min_lat} to {max_lat}")
+            print(f"  Longitude: {min_lon} to {max_lon}")
+            print(f"  Latitude: {min_lat} to {max_lat}")
 
             # Filter tiles that intersect with the bounding box
             gdf_filtered = gdf.cx[min_lon:max_lon, min_lat:max_lat]
 
-            print(f"Number of tiles in AOI: {gdf.shape[0]}")
+            print(f"Number of tiles in AOI: {gdf_filtered.shape[0]}")
             print(f"Number of tiles outside AOI: {gdf.shape[0] - gdf_filtered.shape[0]}")
 
             gdf = gdf_filtered
