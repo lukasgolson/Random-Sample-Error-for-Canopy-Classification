@@ -7,7 +7,7 @@ Functions:
 - create_grid(): Generate square grid cells of specified size
 - spatial_filter_grid(): Filter grid cells to those within tile boundaries
 - save_grid(): Save grid to GeoPackage format
-- run_grid_generation(): Main execution function (called from main.py)
+- run_grid_generation(): Main execution function (called from pre-processing.py)
 """
 
 import boto3
@@ -513,6 +513,132 @@ def check_chm_file_sizes(tiles_gdf, bucket_name, sample_size=50):
     print(f"   Storage space needed: ~{stats['estimated_total_size_gb'] * 1.2:.1f} GB (with 20% buffer)")
 
     return stats
+
+
+def generate_systematic_sample_points(grid_gdf, points_per_cell):
+    """
+    Generate systematic sample points within each grid cell.
+    Points have the same relative positions within each cell.
+
+    Parameters:
+    grid_gdf (gpd.GeoDataFrame): Grid cells
+    points_per_cell (int): Number of sample points per grid cell
+
+    Returns:
+    gpd.GeoDataFrame: Sample points with grid_id reference
+    """
+    import numpy as np
+    from shapely.geometry import Point
+    import math
+
+    print(f"🎯 GENERATING {points_per_cell:,} SYSTEMATIC SAMPLE POINTS PER GRID CELL...")
+    print(f"   Processing {len(grid_gdf):,} grid cells...")
+
+    # Calculate grid layout for points (as square as possible)
+    n_points = points_per_cell
+    cols = int(math.ceil(math.sqrt(n_points)))
+    rows = int(math.ceil(n_points / cols))
+
+    print(f"   Point pattern: {rows} rows × {cols} columns = {rows * cols} points per cell")
+
+    # Generate relative positions (0 to 1) within a unit square
+    x_positions = np.linspace(0.1, 0.9, cols)  # 10% buffer from edges
+    y_positions = np.linspace(0.1, 0.9, rows)  # 10% buffer from edges
+
+    # Create all combinations of x,y positions
+    relative_points = []
+    for y in y_positions:
+        for x in x_positions:
+            relative_points.append((x, y))
+
+    # Only take the number we need
+    relative_points = relative_points[:n_points]
+
+    print(f"   Using {len(relative_points)} points per cell (some cells may have fewer due to grid layout)")
+
+    # Generate points for each grid cell
+    all_points = []
+    all_grid_ids = []
+
+    for idx, row in tqdm(grid_gdf.iterrows(), total=len(grid_gdf), desc="Generating points"):
+        grid_cell = row.geometry
+        grid_id = row['grid_id']
+
+        # Get bounding box of this grid cell
+        minx, miny, maxx, maxy = grid_cell.bounds
+        cell_width = maxx - minx
+        cell_height = maxy - miny
+
+        # Generate points at same relative positions within this cell
+        cell_points = []
+        for rel_x, rel_y in relative_points:
+            # Convert relative position to absolute coordinates
+            abs_x = minx + (rel_x * cell_width)
+            abs_y = miny + (rel_y * cell_height)
+
+            point = Point(abs_x, abs_y)
+
+            # Ensure point is actually inside the grid cell (for irregular shapes)
+            if grid_cell.contains(point):
+                cell_points.append(point)
+                all_grid_ids.append(grid_id)
+
+        all_points.extend(cell_points)
+
+    # Create GeoDataFrame of sample points
+    points_gdf = gpd.GeoDataFrame({
+        'point_id': range(len(all_points)),
+        'grid_id': all_grid_ids,
+        'sample_type': 'systematic'
+    }, geometry=all_points, crs=grid_gdf.crs)
+
+    print(f"✅ Generated {len(points_gdf):,} total sample points")
+    print(f"   Average points per grid cell: {len(points_gdf) / len(grid_gdf):.1f}")
+
+    return points_gdf
+
+
+def generate_sample_points_for_grids(grid_sizes_dict, active_bbox):
+    """
+    Generate sample points for multiple grid files.
+
+    Parameters:
+    grid_sizes_dict (dict): {grid_size_km: points_per_cell}
+    active_bbox (list): Bounding box for naming
+
+    Returns:
+    dict: {grid_size: points_gdf}
+    """
+    results = {}
+
+    for grid_size_km, points_per_cell in grid_sizes_dict.items():
+        print(f"\n{'=' * 60}")
+        print(f"PROCESSING {grid_size_km}km GRID")
+        print(f"{'=' * 60}")
+
+        # Load the grid file
+        grid_filename = _get_filename_from_km(grid_size_km)
+
+        try:
+            grid_gdf = gpd.read_file(grid_filename)
+            print(f"📂 Loaded grid: {grid_filename}")
+            print(f"   Grid cells: {len(grid_gdf):,}")
+
+            # Generate sample points
+            points_gdf = generate_systematic_sample_points(grid_gdf, points_per_cell)
+
+            # Save sample points
+            points_filename = f"sample_points_{grid_size_km}km.gpkg"
+            points_gdf.to_file(points_filename, driver='GPKG')
+            print(f"💾 Saved sample points: {points_filename}")
+
+            results[grid_size_km] = points_gdf
+
+        except Exception as e:
+            print(f"❌ Error processing {grid_size_km}km grid: {e}")
+            continue
+
+    return results
 
 
 def placeholder_analysis(tiles_gdf, config):
