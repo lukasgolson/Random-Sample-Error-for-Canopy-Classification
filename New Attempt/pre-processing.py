@@ -11,7 +11,7 @@ USE_TEST_SETTINGS = True        # Set to True to run a test of the code using a 
 # Explore the CHM tiles
 EXPLORE_S3_STRUCTURE = False    # Set to True to explore S3 bucket structure
 CHECK_CHM_FILE_SIZES = False    # Set to True to analyze CHM file sizes
-SHOW_TILES_PLOT = False         # Set to True to visualize the tiles
+SHOW_TILES_PLOT = True         # Set to True to visualize the tiles
 
 # Grid generation and mapping
 GENERATE_GRIDS = False          # Set to True to generate grids
@@ -23,6 +23,8 @@ SHOW_SAMPLE_POINTS_MAP = True   # Set to True to show a map of the generated sam
 # Download the CHMs and merge
 DOWNLOAD_CHM = False             # Set to True to downlaod the Meta CHM tiles, converted to binary
 CREATE_CHM_MOSAIC = False       # Set to True to merge the Meta CHM tiles
+
+#endregion
 
 # =============================================================================
 # CONFIGURATION OPTIONS - Modify these as needed
@@ -203,12 +205,12 @@ if __name__ == "__main__":
         print(f"\n🎯 GENERATING SAMPLE POINTS...")
 
         # Only process grids that exist for current mode
-        active_sample_config = {}
-        for size in active_grid_sizes:
-            if size in SAMPLE_POINTS_CONFIG:
-                active_sample_config[size] = SAMPLE_POINTS_CONFIG[size]
+        active_sample_config = {size: SAMPLE_POINTS_CONFIG[size]
+                                for size in active_grid_sizes
+                                if size in SAMPLE_POINTS_CONFIG}
 
         if active_sample_config:
+            # Generate sample points for all active grid sizes
             sample_results = generate_sample_points_for_grids(active_sample_config, active_bbox)
 
             # Optional: Show sample points map
@@ -216,10 +218,11 @@ if __name__ == "__main__":
                 print(f"\n🗺️  CREATING SAMPLE POINTS MAP...")
                 from functions import plot_sample_points_map
 
-                # Plot sample points for each grid size
                 for grid_size_km, points_gdf in sample_results.items():
                     if points_gdf is not None and len(points_gdf) > 0:
-                        plot_sample_points_map(points_gdf, tiles_gdf, active_bbox, grid_size_km)
+                        # Use the new function that plots all points
+                        plot_sample_points_map(points_gdf, tiles_gdf=tiles_gdf,
+                                               bbox=active_bbox, grid_size_km=grid_size_km)
         else:
             print("   No sample point configuration found for active grid sizes")
 
