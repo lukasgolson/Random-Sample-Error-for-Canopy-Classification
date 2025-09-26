@@ -105,7 +105,7 @@ def download_tiles_geojson(bucket_name, key, bbox=None, show_plot=False):
             # Calculate average polygon size in sq. metres
             gdf_projected = gdf.to_crs(epsg=5070)  # Albers projection for North America
             avg_area = gdf_projected.area.mean()
-            print(f"  Average tile size: {avg_area:,.2f} m²")
+            print(f"  Average tile size: {avg_area / 1e6:,.2f} km²")
 
         # Optional visualization
         if show_plot:
@@ -834,6 +834,81 @@ def create_chm_mosaic(binary_files_dir, output_mosaic_path, tiles_gdf=None):
         # Close all source files
         for src in src_files:
             src.close()
+
+
+def plot_sample_points_map(points_gdf, tiles_gdf, bbox, grid_size_km):
+    """
+    Plot sample points overlaid on tiles and grid.
+
+    Parameters:
+    points_gdf (gpd.GeoDataFrame): Sample points to plot
+    tiles_gdf (gpd.GeoDataFrame): Tiles geodataframe
+    bbox (list): Bounding box for map extent
+    grid_size_km (int): Grid size in kilometers for title
+
+    Returns:
+    None: Displays the plot
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+    import numpy as np
+
+    print(f"   Creating sample points map for {grid_size_km}km grid...")
+
+    fig, ax = plt.subplots(1, 1, figsize=(15, 12))
+
+    # Plot tiles as background
+    if tiles_gdf is not None:
+        tiles_gdf.plot(ax=ax, facecolor='lightgreen', edgecolor='darkgreen',
+                       alpha=0.3, linewidth=0.5)
+
+    # Sample a subset of points if there are too many (for performance)
+    if len(points_gdf) > 5000:
+        sample_size = 5000
+        points_sample = points_gdf.sample(n=sample_size, random_state=42)
+        print(f"   Showing {sample_size:,} of {len(points_gdf):,} points for visualization")
+    else:
+        points_sample = points_gdf
+        print(f"   Showing all {len(points_gdf):,} sample points")
+
+    # Plot sample points
+    points_sample.plot(ax=ax, color='red', markersize=1, alpha=0.7)
+
+    # Add bounding box if provided
+    if bbox is not None:
+        min_lon, min_lat, max_lon, max_lat = bbox
+        rect = Rectangle((min_lon, min_lat), max_lon - min_lon, max_lat - min_lat,
+                         linewidth=2, edgecolor='blue', facecolor='none', linestyle='--')
+        ax.add_patch(rect)
+        ax.set_xlim(min_lon - 1, max_lon + 1)
+        ax.set_ylim(min_lat - 0.5, max_lat + 0.5)
+
+    # Formatting
+    ax.set_xlabel('Longitude', fontsize=14)
+    ax.set_ylabel('Latitude', fontsize=14)
+    ax.set_title(f'Sample Points Distribution - {grid_size_km}km Grid\n{len(points_gdf):,} total points',
+                 fontsize=16, pad=20)
+
+    # Create custom legend (fixes the warning)
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='s', color='w', markerfacecolor='lightgreen',
+               markersize=10, alpha=0.3, label='Forest Tiles'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red',
+               markersize=5, alpha=0.7, label='Sample Points'),
+        Line2D([0], [0], color='blue', linestyle='--', linewidth=2, label='AOI Boundary')
+    ]
+    ax.legend(handles=legend_elements, loc='upper right', fontsize=12)
+
+    ax.grid(True, alpha=0.3)
+
+    # Add statistics text box
+    stats_text = f'Grid Size: {grid_size_km}km\nTotal Points: {len(points_gdf):,}\nUnique Grids: {points_gdf["grid_id"].nunique():,}'
+    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
+            verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    plt.tight_layout()
+    plt.show()
 
 
 def placeholder_analysis(tiles_gdf, config):
