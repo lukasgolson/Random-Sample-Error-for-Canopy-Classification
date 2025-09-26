@@ -19,7 +19,7 @@ from shapely.geometry import Polygon
 from tqdm import tqdm
 import pandas as pd
 import io
-
+import rasterio
 
 def list_s3_directories(bucket_name, prefix=''):
     """
@@ -414,7 +414,7 @@ def run_grid_generation(config):
     return True
 
 
-def check_chm_file_sizes(tiles_gdf, bucket_name, sample_size=50):
+def check_chm_file_sizes(tiles_gdf, bucket_name, sample_size=200):
     """
     Check average file size of CHM GeoTIFF files corresponding to tiles.
 
@@ -639,6 +639,201 @@ def generate_sample_points_for_grids(grid_sizes_dict, active_bbox):
             continue
 
     return results
+
+
+def download_chm(tiles_gdf, bucket_name, output_dir='chm_binary', binary_threshold=2.0):
+    """
+    Download CHM tiles from S3 and convert to binary rasters.
+
+    Parameters:
+    tiles_gdf (gpd.GeoDataFrame): Tiles data with tile/quadkey identifiers
+    bucket_name (str): S3 bucket name containing CHM data
+    output_dir (str): Local directory to save binary CHM files
+    binary_threshold (float): Threshold value - values >= threshold become 1, others become 0
+
+    Returns:
+    dict: Summary of download and processing results
+    """
+    import rasterio
+    import numpy as np
+    from pathlib import Path
+
+    print(f"🌲 DOWNLOADING AND PROCESSING CHM TILES...")
+    print(f"   Tiles to process: {len(tiles_gdf):,}")
+    print(f"   Binary threshold: values >= {binary_threshold} → 1, values < {binary_threshold} → 0")
+    print(f"   Output directory: {output_dir}")
+
+    # Create output directory
+    output_path = Path(output_dir)
+    output_path.mkdir(exist_ok=True)
+
+    # Initialize S3 client
+    s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
+
+    # Get tile identifiers
+    if 'tile' in tiles_gdf.columns:
+        tile_ids = tiles_gdf['tile'].tolist()
+        id_column = 'tile'
+    elif 'quadkey' in tiles_gdf.columns:
+        tile_ids = tiles_gdf['quadkey'].tolist()
+        id_column = 'quadkey'
+    else:
+        print("❌ Could not find 'tile' or 'quadkey' column in tiles data")
+        return None
+
+    print(f"   Using column '{id_column}' for tile identifiers")
+
+    # Track processing results
+    results = {
+        'total_tiles': len(tile_ids),
+        'downloaded': 0,
+        'processed': 0,
+        'failed': 0,
+        'errors': [],
+        'output_files': []
+    }
+
+    # Process each tile
+    for i, tile_id in enumerate(tqdm(tile_ids, desc="Processing CHM tiles")):
+        try:
+            # Construct S3 key for CHM file
+            chm_key = f'forests/v1/alsgedi_global_v6_float/chm/{tile_id}.tif'
+
+            # Download CHM file to memory
+            try:
+                response = s3.get_object(Bucket=bucket_name, Key=chm_key)
+                chm_data = response['Body'].read()
+                results['downloaded'] += 1
+            except Exception as e:
+                results['failed'] += 1
+                results['errors'].append(f"Download failed for {tile_id}: {str(e)}")
+                continue
+
+            # Read raster data using rasterio
+            with rasterio.io.MemoryFile(chm_data) as memfile:
+                with memfile.open() as src:
+                    # Read the raster data
+                    chm_array = src.read(1)  # Read first (and typically only) band
+                    profile = src.profile.copy()
+
+                    # Convert to binary based on threshold
+                    # Values >= threshold become 1, others become 0
+                    binary_array = np.where(chm_array >= binary_threshold, 1, 0).astype(np.uint8)
+
+                    # Handle NoData values (keep them as NoData)
+                    if src.nodata is not None:
+                        nodata_mask = chm_array == src.nodata
+                        binary_array[nodata_mask] = 255  # Use 255 as NoData for uint8
+
+                    # Update profile for binary output
+                    profile.update({
+                        'dtype': 'uint8',
+                        'nodata': 255,
+                        'compress': 'lzw'
+                    })
+
+                    # Save binary raster
+                    output_file = output_path / f"{tile_id}_binary.tif"
+                    with rasterio.open(output_file, 'w', **profile) as dst:
+                        dst.write(binary_array, 1)
+
+                    results['processed'] += 1
+                    results['output_files'].append(str(output_file))
+
+        except Exception as e:
+            results['failed'] += 1
+            results['errors'].append(f"Processing failed for {tile_id}: {str(e)}")
+            continue
+
+        # Progress update every 10 files
+        if (i + 1) % 10 == 0:
+            print(f"   Progress: {i + 1}/{len(tile_ids)} tiles processed")
+
+    # Print summary
+    print(f"\n📊 CHM PROCESSING SUMMARY:")
+    print(f"   Total tiles: {results['total_tiles']:,}")
+    print(f"   Successfully downloaded: {results['downloaded']:,}")
+    print(f"   Successfully processed: {results['processed']:,}")
+    print(f"   Failed: {results['failed']:,}")
+    print(f"   Success rate: {results['processed'] / results['total_tiles'] * 100:.1f}%")
+    print(f"   Output files saved to: {output_path.absolute()}")
+
+    # Show first few errors if any
+    if results['errors']:
+        print(f"\n⚠️  First few errors:")
+        for error in results['errors'][:5]:
+            print(f"     {error}")
+        if len(results['errors']) > 5:
+            print(f"     ... and {len(results['errors']) - 5} more errors")
+
+    return results
+
+
+def create_chm_mosaic(binary_files_dir, output_mosaic_path, tiles_gdf=None):
+    """
+    Create a mosaic from binary CHM tiles.
+
+    Parameters:
+    binary_files_dir (str): Directory containing binary CHM files
+    output_mosaic_path (str): Output path for the mosaic
+    tiles_gdf (gpd.GeoDataFrame): Optional tiles geodataframe for spatial reference
+
+    Returns:
+    str: Path to created mosaic file
+    """
+    import rasterio
+    from rasterio.merge import merge
+    from pathlib import Path
+    import glob
+
+    print(f"🗺️  CREATING CHM MOSAIC...")
+
+    # Find all binary CHM files
+    binary_files = glob.glob(str(Path(binary_files_dir) / "*_binary.tif"))
+
+    if not binary_files:
+        print(f"❌ No binary CHM files found in {binary_files_dir}")
+        return None
+
+    print(f"   Found {len(binary_files)} binary CHM files")
+
+    # Open all files
+    src_files = []
+    try:
+        for file_path in binary_files:
+            src = rasterio.open(file_path)
+            src_files.append(src)
+
+        # Create mosaic
+        print("   Merging tiles into mosaic...")
+        mosaic, out_transform = merge(src_files, nodata=255)
+
+        # Update metadata
+        out_meta = src_files[0].meta.copy()
+        out_meta.update({
+            "driver": "GTiff",
+            "height": mosaic.shape[1],
+            "width": mosaic.shape[2],
+            "transform": out_transform,
+            "compress": "lzw",
+            "nodata": 255
+        })
+
+        # Write mosaic
+        print(f"   Saving mosaic to: {output_mosaic_path}")
+        with rasterio.open(output_mosaic_path, "w", **out_meta) as dest:
+            dest.write(mosaic)
+
+        print(f"✅ Mosaic created successfully!")
+        print(f"   Dimensions: {mosaic.shape[2]} x {mosaic.shape[1]} pixels")
+        print(f"   File size: {Path(output_mosaic_path).stat().st_size / 1024 / 1024:.1f} MB")
+
+        return output_mosaic_path
+
+    finally:
+        # Close all source files
+        for src in src_files:
+            src.close()
 
 
 def placeholder_analysis(tiles_gdf, config):
