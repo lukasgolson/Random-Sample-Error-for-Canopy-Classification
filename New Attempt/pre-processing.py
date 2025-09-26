@@ -1,25 +1,41 @@
 # This is the file that processes the CHM files
 
 # =============================================================================
-# CONFIGURATION OPTIONS - Modify these as needed
+# SELECT WHICH PROCESSES TO RUN
 # =============================================================================
 #region
 
-# Select which processes to run
+# Run through pre-processing with test settings (low complexity, fast run)
 USE_TEST_SETTINGS = True        # Set to True to run a test of the code using a larger BBOX and AOI
+
+# Explore the CHM tiles
 EXPLORE_S3_STRUCTURE = False    # Set to True to explore S3 bucket structure
-CHECK_CHM_FILE_SIZES = True     # Set to True to analyze CHM file sizes
+CHECK_CHM_FILE_SIZES = False    # Set to True to analyze CHM file sizes
 SHOW_TILES_PLOT = False         # Set to True to visualize the tiles
-GENERATE_GRIDS = False           # Set to True to generate grids
+
+# Grid generation and mapping
+GENERATE_GRIDS = False          # Set to True to generate grids
+
+# Sample point generation and mapping
 GENERATE_SAMPLE_POINTS = True   # Set to True to generate systematic sample points
+SHOW_SAMPLE_POINTS_MAP = True   # Set to True to show a map of the generated sample points
+
+# Download the CHMs and merge
+DOWNLOAD_CHM = False             # Set to True to downlaod the Meta CHM tiles, converted to binary
+CREATE_CHM_MOSAIC = False       # Set to True to merge the Meta CHM tiles
+
+# =============================================================================
+# CONFIGURATION OPTIONS - Modify these as needed
+# =============================================================================
+#region
 
 # Geographic settings
 BBOX = [-127, 24, -66.9, 49]   # Bounding box: [min_lon, min_lat, max_lon, max_lat]
 TEST_BBOX = [-80, 40, -70, 45]      # Small NY/New England region
 
 # Grid specifications
-GRID_SIZES = [1, 20, 40] # Neighbourhood (1 km), city (20 km), and region (35 km) grids
-TEST_GRID_SIZES = [100]             # Large 100km grids for speed
+GRID_SIZES = [1, 20, 40]    # Neighbourhood (1 km), city (20 km), and region (35 km) grids
+TEST_GRID_SIZES = [100]     # Large 100km grids for speed
 
 # Sample point specifications
 base_points = 1000 # Number of points per 1 sq km area
@@ -28,6 +44,10 @@ SAMPLE_POINTS_CONFIG = {1: base_points, 20: (20*20*base_points), 40: (40*40*base
 # S3 data source configuration
 BUCKET_NAME = 'dataforgood-fb-data'
 TILES_KEY = 'forests/v1/alsgedi_global_v6_float/tiles.geojson'
+
+# CHM download configuration
+CHM_OUTPUT_DIR = "chm_binary"   # Output directory
+CHM_BINARY_THRESHOLD = 2.0      # Binary threshold value
 
 #endregion
 
@@ -49,6 +69,9 @@ if __name__ == "__main__":
     print(f"  - Explore S3: {EXPLORE_S3_STRUCTURE}")
     print(f"  - Show tiles plot: {SHOW_TILES_PLOT}")
     print(f"  - Generate grids: {GENERATE_GRIDS}")
+    print(f"  - Generate sample points: {GENERATE_SAMPLE_POINTS}")
+    print(f"  - Download CHM: {DOWNLOAD_CHM}")
+    print(f"  - Merge CHM: {CREATE_CHM_MOSAIC}")
     print(f"  - Grid sizes: {active_grid_sizes} km")
     print("=" * 50)
     print("\n")
@@ -63,7 +86,8 @@ if __name__ == "__main__":
         print("\n" + "=" * 60 + "\n")
 
     # Step 2: Load tiles data (needed for grids, plots, or analysis)
-    if GENERATE_GRIDS or SHOW_TILES_PLOT or (not GENERATE_GRIDS and not EXPLORE_S3_STRUCTURE and not SHOW_TILES_PLOT):
+    if GENERATE_GRIDS or SHOW_TILES_PLOT or DOWNLOAD_CHM or GENERATE_SAMPLE_POINTS or (
+            not GENERATE_GRIDS and not EXPLORE_S3_STRUCTURE and not SHOW_TILES_PLOT):
         print("📥 LOADING TILES DATA...")
         tiles_gdf = download_tiles_geojson(
             BUCKET_NAME,
@@ -186,8 +210,49 @@ if __name__ == "__main__":
 
         if active_sample_config:
             sample_results = generate_sample_points_for_grids(active_sample_config, active_bbox)
+
+            # Optional: Show sample points map
+            if SHOW_SAMPLE_POINTS_MAP and sample_results:
+                print(f"\n🗺️  CREATING SAMPLE POINTS MAP...")
+                from functions import plot_sample_points_map
+
+                # Plot sample points for each grid size
+                for grid_size_km, points_gdf in sample_results.items():
+                    if points_gdf is not None and len(points_gdf) > 0:
+                        plot_sample_points_map(points_gdf, tiles_gdf, active_bbox, grid_size_km)
         else:
             print("   No sample point configuration found for active grid sizes")
+
+    # Step 7: Download and process CHM tiles if requested
+    if DOWNLOAD_CHM and tiles_gdf is not None:
+        print(f"\n🌲 DOWNLOADING CHM TILES...")
+
+        from functions import download_chm, create_chm_mosaic
+
+        # Download and process CHM tiles
+        chm_results = download_chm(
+            tiles_gdf,
+            BUCKET_NAME,
+            output_dir=CHM_OUTPUT_DIR,
+            binary_threshold=CHM_BINARY_THRESHOLD
+        )
+
+        if chm_results and chm_results['processed'] > 0:
+            print(f"✅ CHM processing completed: {chm_results['processed']} tiles processed")
+
+            # Optionally create mosaic
+            if CREATE_CHM_MOSAIC:
+                print(f"\n🗺️  CREATING CHM MOSAIC...")
+                mosaic_path = f"{CHM_OUTPUT_DIR}/chm_binary_mosaic.tif"
+                mosaic_result = create_chm_mosaic(CHM_OUTPUT_DIR, mosaic_path, tiles_gdf)
+
+                if mosaic_result:
+                    print(f"✅ CHM mosaic created: {mosaic_result}")
+                else:
+                    print("❌ Failed to create CHM mosaic")
+        else:
+            print("❌ CHM processing failed or no tiles were processed")
+            success = False
 
     # Final summary
     print(f"\n{'📋 EXECUTION SUMMARY':=^60}")
@@ -200,6 +265,8 @@ if __name__ == "__main__":
         operations.append("✅ Grid generation")
     if not GENERATE_GRIDS and tiles_gdf is not None:
         operations.append("✅ Analysis placeholder")
+    if DOWNLOAD_CHM:
+        operations.append("✅ CHM tile download and processing")
 
     if operations:
         print("Completed operations:")
@@ -212,7 +279,3 @@ if __name__ == "__main__":
 
     # Exit with appropriate code
     exit(0 if success else 1)
-
-# Notes:
-# 1. need to add a tiles.geojson reference to associate one or more quadkeys with
-# the grid cells.
