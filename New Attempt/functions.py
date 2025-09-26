@@ -21,6 +21,7 @@ import pandas as pd
 import io
 import rasterio
 
+# Explore the CHM tiles
 def list_s3_directories(bucket_name, prefix=''):
     """
     List directories and files in an S3 bucket with folder-like structure.
@@ -153,6 +154,108 @@ def _plot_tiles(gdf, bbox=None):
     plt.show()
 
 
+def check_chm_file_sizes(tiles_gdf, bucket_name, sample_size=200):
+    """
+    Check average file size of CHM GeoTIFF files corresponding to tiles.
+
+    Parameters:
+    tiles_gdf (gpd.GeoDataFrame): Tiles data with quadkey/tile column
+    bucket_name (str): S3 bucket name
+    sample_size (int): Number of files to sample for size estimation
+
+    Returns:
+    dict: File size statistics
+    """
+    import random
+
+    s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
+
+    print(f"🔍 CHECKING CHM FILE SIZES...")
+
+    # Get tile identifiers - check what column contains the quadkey
+    if 'tile' in tiles_gdf.columns:
+        tile_ids = tiles_gdf['tile'].tolist()
+        id_column = 'tile'
+    elif 'quadkey' in tiles_gdf.columns:
+        tile_ids = tiles_gdf['quadkey'].tolist()
+        id_column = 'quadkey'
+    else:
+        print("❌ Could not find 'tile' or 'quadkey' column in tiles data")
+        return None
+
+    print(f"   Found {len(tile_ids)} tiles using column '{id_column}'")
+
+    # Sample random tiles to check
+    sample_tiles = random.sample(tile_ids, min(sample_size, len(tile_ids)))
+    print(f"   Sampling {len(sample_tiles)} tiles for file size analysis...")
+
+    file_sizes = []
+    found_files = 0
+    missing_files = 0
+
+    for i, tile_id in enumerate(sample_tiles):
+        if i % 10 == 0:  # Progress indicator
+            print(f"   Progress: {i + 1}/{len(sample_tiles)}")
+
+        # Construct S3 key for CHM file
+        chm_key = f'forests/v1/alsgedi_global_v6_float/chm/{tile_id}.tif'
+
+        try:
+            # Get object metadata (HEAD request - doesn't download file)
+            response = s3.head_object(Bucket=bucket_name, Key=chm_key)
+            file_size_bytes = response['ContentLength']
+            file_sizes.append(file_size_bytes)
+            found_files += 1
+
+        except Exception as e:
+            missing_files += 1
+            if missing_files <= 5:  # Only show first few missing files
+                print(f"   ⚠️  Missing: {chm_key}")
+
+    if not file_sizes:
+        print("❌ No CHM files found")
+        return None
+
+    # Calculate statistics
+    avg_size_bytes = sum(file_sizes) / len(file_sizes)
+    min_size_bytes = min(file_sizes)
+    max_size_bytes = max(file_sizes)
+    total_estimated_gb = (avg_size_bytes * len(tile_ids)) / (1024 ** 3)
+
+    # Convert to human readable
+    def bytes_to_human(bytes_val):
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if bytes_val < 1024.0:
+                return f"{bytes_val:.1f} {unit}"
+            bytes_val /= 1024.0
+        return f"{bytes_val:.1f} TB"
+
+    stats = {
+        'sample_size': len(sample_tiles),
+        'found_files': found_files,
+        'missing_files': missing_files,
+        'avg_size_bytes': avg_size_bytes,
+        'avg_size_human': bytes_to_human(avg_size_bytes),
+        'min_size_human': bytes_to_human(min_size_bytes),
+        'max_size_human': bytes_to_human(max_size_bytes),
+        'total_tiles': len(tile_ids),
+        'estimated_total_size_gb': total_estimated_gb
+    }
+
+    # Print results
+    print(f"\n📊 CHM FILE SIZE ANALYSIS:")
+    print(f"   Sample analyzed: {found_files}/{len(sample_tiles)} files")
+    print(f"   Missing files: {missing_files}")
+    print(f"   Average file size: {stats['avg_size_human']}")
+    print(f"   Size range: {stats['min_size_human']} - {stats['max_size_human']}")
+    print(f"   Total tiles in dataset: {stats['total_tiles']:,}")
+    print(f"   Estimated total size: {stats['estimated_total_size_gb']:.1f} GB")
+    print(f"   Storage space needed: ~{stats['estimated_total_size_gb'] * 1.2:.1f} GB (with 20% buffer)")
+
+    return stats
+
+
+# Grid generation and mapping
 def create_grid(bounds, cell_size_meters, crs='EPSG:4326'):
     """
     Create a square grid of specified cell size.
@@ -414,111 +517,11 @@ def run_grid_generation(config):
     return True
 
 
-def check_chm_file_sizes(tiles_gdf, bucket_name, sample_size=200):
-    """
-    Check average file size of CHM GeoTIFF files corresponding to tiles.
-
-    Parameters:
-    tiles_gdf (gpd.GeoDataFrame): Tiles data with quadkey/tile column
-    bucket_name (str): S3 bucket name
-    sample_size (int): Number of files to sample for size estimation
-
-    Returns:
-    dict: File size statistics
-    """
-    import random
-
-    s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
-
-    print(f"🔍 CHECKING CHM FILE SIZES...")
-
-    # Get tile identifiers - check what column contains the quadkey
-    if 'tile' in tiles_gdf.columns:
-        tile_ids = tiles_gdf['tile'].tolist()
-        id_column = 'tile'
-    elif 'quadkey' in tiles_gdf.columns:
-        tile_ids = tiles_gdf['quadkey'].tolist()
-        id_column = 'quadkey'
-    else:
-        print("❌ Could not find 'tile' or 'quadkey' column in tiles data")
-        return None
-
-    print(f"   Found {len(tile_ids)} tiles using column '{id_column}'")
-
-    # Sample random tiles to check
-    sample_tiles = random.sample(tile_ids, min(sample_size, len(tile_ids)))
-    print(f"   Sampling {len(sample_tiles)} tiles for file size analysis...")
-
-    file_sizes = []
-    found_files = 0
-    missing_files = 0
-
-    for i, tile_id in enumerate(sample_tiles):
-        if i % 10 == 0:  # Progress indicator
-            print(f"   Progress: {i + 1}/{len(sample_tiles)}")
-
-        # Construct S3 key for CHM file
-        chm_key = f'forests/v1/alsgedi_global_v6_float/chm/{tile_id}.tif'
-
-        try:
-            # Get object metadata (HEAD request - doesn't download file)
-            response = s3.head_object(Bucket=bucket_name, Key=chm_key)
-            file_size_bytes = response['ContentLength']
-            file_sizes.append(file_size_bytes)
-            found_files += 1
-
-        except Exception as e:
-            missing_files += 1
-            if missing_files <= 5:  # Only show first few missing files
-                print(f"   ⚠️  Missing: {chm_key}")
-
-    if not file_sizes:
-        print("❌ No CHM files found")
-        return None
-
-    # Calculate statistics
-    avg_size_bytes = sum(file_sizes) / len(file_sizes)
-    min_size_bytes = min(file_sizes)
-    max_size_bytes = max(file_sizes)
-    total_estimated_gb = (avg_size_bytes * len(tile_ids)) / (1024 ** 3)
-
-    # Convert to human readable
-    def bytes_to_human(bytes_val):
-        for unit in ['B', 'KB', 'MB', 'GB']:
-            if bytes_val < 1024.0:
-                return f"{bytes_val:.1f} {unit}"
-            bytes_val /= 1024.0
-        return f"{bytes_val:.1f} TB"
-
-    stats = {
-        'sample_size': len(sample_tiles),
-        'found_files': found_files,
-        'missing_files': missing_files,
-        'avg_size_bytes': avg_size_bytes,
-        'avg_size_human': bytes_to_human(avg_size_bytes),
-        'min_size_human': bytes_to_human(min_size_bytes),
-        'max_size_human': bytes_to_human(max_size_bytes),
-        'total_tiles': len(tile_ids),
-        'estimated_total_size_gb': total_estimated_gb
-    }
-
-    # Print results
-    print(f"\n📊 CHM FILE SIZE ANALYSIS:")
-    print(f"   Sample analyzed: {found_files}/{len(sample_tiles)} files")
-    print(f"   Missing files: {missing_files}")
-    print(f"   Average file size: {stats['avg_size_human']}")
-    print(f"   Size range: {stats['min_size_human']} - {stats['max_size_human']}")
-    print(f"   Total tiles in dataset: {stats['total_tiles']:,}")
-    print(f"   Estimated total size: {stats['estimated_total_size_gb']:.1f} GB")
-    print(f"   Storage space needed: ~{stats['estimated_total_size_gb'] * 1.2:.1f} GB (with 20% buffer)")
-
-    return stats
-
-
+# Sample point generation and mapping
 def generate_systematic_sample_points(grid_gdf, points_per_cell):
     """
-    Generate systematic sample points within each grid cell.
-    Points have the same relative positions within each cell.
+    Generate systematic sample points within each grid cell with consistent relative positioning.
+    All grid cells will have points at the same relative x,y positions within the cell.
 
     Parameters:
     grid_gdf (gpd.GeoDataFrame): Grid cells
@@ -539,26 +542,27 @@ def generate_systematic_sample_points(grid_gdf, points_per_cell):
     cols = int(math.ceil(math.sqrt(n_points)))
     rows = int(math.ceil(n_points / cols))
 
-    print(f"   Point pattern: {rows} rows × {cols} columns = {rows * cols} points per cell")
+    print(f"   Point pattern: {rows} rows × {cols} columns")
 
-    # Generate relative positions (0 to 1) within a unit square
-    x_positions = np.linspace(0.1, 0.9, cols)  # 10% buffer from edges
-    y_positions = np.linspace(0.1, 0.9, rows)  # 10% buffer from edges
+    # Generate relative positions (0 to 1) within a unit square - SAME FOR ALL CELLS
+    x_positions = np.linspace(0, 1, cols)  # 10% buffer from edges
+    y_positions = np.linspace(0, 1, rows)  # 10% buffer from edges
 
     # Create all combinations of x,y positions
     relative_points = []
+    point_count = 0
     for y in y_positions:
         for x in x_positions:
-            relative_points.append((x, y))
+            if point_count < n_points:  # Only take exactly the number requested
+                relative_points.append((x, y))
+                point_count += 1
 
-    # Only take the number we need
-    relative_points = relative_points[:n_points]
+    print(f"   Using {len(relative_points)} points per cell with consistent positioning")
 
-    print(f"   Using {len(relative_points)} points per cell (some cells may have fewer due to grid layout)")
-
-    # Generate points for each grid cell
+    # Generate points for each grid cell using the SAME relative positions
     all_points = []
     all_grid_ids = []
+    all_point_ids = []
 
     for idx, row in tqdm(grid_gdf.iterrows(), total=len(grid_gdf), desc="Generating points"):
         grid_cell = row.geometry
@@ -569,38 +573,44 @@ def generate_systematic_sample_points(grid_gdf, points_per_cell):
         cell_width = maxx - minx
         cell_height = maxy - miny
 
-        # Generate points at same relative positions within this cell
-        cell_points = []
-        for rel_x, rel_y in relative_points:
+        # Generate points at the SAME relative positions within this cell
+        for point_idx, (rel_x, rel_y) in enumerate(relative_points):
             # Convert relative position to absolute coordinates
             abs_x = minx + (rel_x * cell_width)
             abs_y = miny + (rel_y * cell_height)
 
             point = Point(abs_x, abs_y)
 
-            # Ensure point is actually inside the grid cell (for irregular shapes)
-            if grid_cell.contains(point):
-                cell_points.append(point)
+            # Ensure point is actually inside the grid cell (should always be true for regular grids)
+            if grid_cell.contains(point) or grid_cell.intersects(point):
+                all_points.append(point)
                 all_grid_ids.append(grid_id)
-
-        all_points.extend(cell_points)
+                all_point_ids.append(f"{grid_id}_p{point_idx}")
 
     # Create GeoDataFrame of sample points
     points_gdf = gpd.GeoDataFrame({
-        'point_id': range(len(all_points)),
+        'point_id': all_point_ids,
         'grid_id': all_grid_ids,
-        'sample_type': 'systematic'
+        'sample_type': 'systematic',
+        'points_per_cell': points_per_cell
     }, geometry=all_points, crs=grid_gdf.crs)
 
     print(f"✅ Generated {len(points_gdf):,} total sample points")
-    print(f"   Average points per grid cell: {len(points_gdf) / len(grid_gdf):.1f}")
+    print(f"   Points per cell: {len(points_gdf) / len(grid_gdf):.1f} (target: {points_per_cell})")
+
+    # Verify consistency
+    points_per_grid = points_gdf.groupby('grid_id').size()
+    if points_per_grid.nunique() == 1:
+        print(f"   ✅ All grid cells have exactly {points_per_grid.iloc[0]} points")
+    else:
+        print(f"   ⚠️  Inconsistent points per cell: {points_per_grid.min()}-{points_per_grid.max()}")
 
     return points_gdf
 
 
 def generate_sample_points_for_grids(grid_sizes_dict, active_bbox):
     """
-    Generate sample points for multiple grid files.
+    Generate sample points for multiple grid files (loads from saved files).
 
     Parameters:
     grid_sizes_dict (dict): {grid_size_km: points_per_cell}
@@ -609,6 +619,7 @@ def generate_sample_points_for_grids(grid_sizes_dict, active_bbox):
     Returns:
     dict: {grid_size: points_gdf}
     """
+    import os
     results = {}
 
     for grid_size_km, points_per_cell in grid_sizes_dict.items():
@@ -618,6 +629,12 @@ def generate_sample_points_for_grids(grid_sizes_dict, active_bbox):
 
         # Load the grid file
         grid_filename = _get_filename_from_km(grid_size_km)
+
+        # Check if grid file exists
+        if not os.path.exists(grid_filename):
+            print(f"❌ Grid file not found: {grid_filename}")
+            print(f"   Please run with GENERATE_GRIDS=True first to create the grid files")
+            continue
 
         try:
             grid_gdf = gpd.read_file(grid_filename)
@@ -641,6 +658,89 @@ def generate_sample_points_for_grids(grid_sizes_dict, active_bbox):
     return results
 
 
+def plot_sample_points_map(points_gdf, tiles_gdf=None, bbox=None, grid_size_km=None):
+    """
+    Plot all sample points overlaid on both Meta CHM tiles and generated grid cells.
+
+    Parameters:
+    points_gdf (gpd.GeoDataFrame): Sample points to plot
+    tiles_gdf (gpd.GeoDataFrame, optional): Meta CHM tiles geodataframe
+    bbox (list, optional): Bounding box for map extent [minx, miny, maxx, maxy]
+    grid_size_km (int, optional): Grid size in kilometers for title
+
+    Returns:
+    None: Displays the plot
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+    from matplotlib.lines import Line2D
+    import os
+
+    print(f"   Creating sample points map for {grid_size_km}km grid...")
+
+    fig, ax = plt.subplots(1, 1, figsize=(15, 12))
+
+    # Plot Meta CHM tiles as background (light green, very transparent)
+    if tiles_gdf is not None:
+        tiles_gdf.plot(ax=ax, facecolor='lightgreen', edgecolor='darkgreen',
+                       alpha=0.2, linewidth=0.3)
+
+    # Load and plot the actual generated grid cells
+    grid_filename = _get_filename_from_km(grid_size_km)
+    if os.path.exists(grid_filename):
+        grid_gdf = gpd.read_file(grid_filename)
+        # Plot grid cells with clear blue boundaries
+        grid_gdf.plot(ax=ax, facecolor='none', edgecolor='blue',
+                     alpha=0.8, linewidth=1.5)
+        print(f"   Loaded and plotted {len(grid_gdf):,} grid cells from {grid_filename}")
+    else:
+        print(f"   Warning: Grid file {grid_filename} not found - only showing Meta CHM tiles")
+
+    # Plot sample points
+    points_gdf.plot(ax=ax, color='red', markersize=1, alpha=0.7)
+    print(f"   Showing all {len(points_gdf):,} sample points")
+
+    # Add bounding box if provided
+    if bbox is not None:
+        min_lon, min_lat, max_lon, max_lat = bbox
+        rect = Rectangle((min_lon, min_lat), max_lon - min_lon, max_lat - min_lat,
+                         linewidth=2, edgecolor='orange', facecolor='none', linestyle='--')
+        ax.add_patch(rect)
+        ax.set_xlim(min_lon - 1, max_lon + 1)
+        ax.set_ylim(min_lat - 0.5, max_lat + 0.5)
+
+    # Formatting
+    ax.set_xlabel('Longitude', fontsize=14)
+    ax.set_ylabel('Latitude', fontsize=14)
+    title = f'Sample Points Distribution'
+    if grid_size_km is not None:
+        title += f' - {grid_size_km}km Grid'
+    title += f'\n{len(points_gdf):,} total points'
+    ax.set_title(title, fontsize=16, pad=20)
+
+    # Create updated legend with clearer labels
+    legend_elements = [
+        Line2D([0], [0], marker='s', color='w', markerfacecolor='lightgreen',
+               markersize=10, alpha=0.2, label='Meta CHM Tiles'),
+        Line2D([0], [0], color='blue', linewidth=2, label=f'{grid_size_km}km Grid Cells'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red',
+               markersize=5, alpha=0.7, label='Sample Points'),
+        Line2D([0], [0], color='orange', linestyle='--', linewidth=2, label='AOI Boundary')
+    ]
+    ax.legend(handles=legend_elements, loc='upper right', fontsize=12)
+
+    ax.grid(True, alpha=0.3)
+
+    # Add statistics text box
+    stats_text = f'Grid Size: {grid_size_km}km\nTotal Points: {len(points_gdf):,}\nUnique Grids: {points_gdf["grid_id"].nunique():,}'
+    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
+            verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    plt.tight_layout()
+    plt.show()
+
+
+# Download the CHMs and merge
 def download_chm(tiles_gdf, bucket_name, output_dir='chm_binary', binary_threshold=2.0):
     """
     Download CHM tiles from S3 and convert to binary rasters.
@@ -836,81 +936,7 @@ def create_chm_mosaic(binary_files_dir, output_mosaic_path, tiles_gdf=None):
             src.close()
 
 
-def plot_sample_points_map(points_gdf, tiles_gdf, bbox, grid_size_km):
-    """
-    Plot sample points overlaid on tiles and grid.
-
-    Parameters:
-    points_gdf (gpd.GeoDataFrame): Sample points to plot
-    tiles_gdf (gpd.GeoDataFrame): Tiles geodataframe
-    bbox (list): Bounding box for map extent
-    grid_size_km (int): Grid size in kilometers for title
-
-    Returns:
-    None: Displays the plot
-    """
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Rectangle
-    import numpy as np
-
-    print(f"   Creating sample points map for {grid_size_km}km grid...")
-
-    fig, ax = plt.subplots(1, 1, figsize=(15, 12))
-
-    # Plot tiles as background
-    if tiles_gdf is not None:
-        tiles_gdf.plot(ax=ax, facecolor='lightgreen', edgecolor='darkgreen',
-                       alpha=0.3, linewidth=0.5)
-
-    # Sample a subset of points if there are too many (for performance)
-    if len(points_gdf) > 5000:
-        sample_size = 5000
-        points_sample = points_gdf.sample(n=sample_size, random_state=42)
-        print(f"   Showing {sample_size:,} of {len(points_gdf):,} points for visualization")
-    else:
-        points_sample = points_gdf
-        print(f"   Showing all {len(points_gdf):,} sample points")
-
-    # Plot sample points
-    points_sample.plot(ax=ax, color='red', markersize=1, alpha=0.7)
-
-    # Add bounding box if provided
-    if bbox is not None:
-        min_lon, min_lat, max_lon, max_lat = bbox
-        rect = Rectangle((min_lon, min_lat), max_lon - min_lon, max_lat - min_lat,
-                         linewidth=2, edgecolor='blue', facecolor='none', linestyle='--')
-        ax.add_patch(rect)
-        ax.set_xlim(min_lon - 1, max_lon + 1)
-        ax.set_ylim(min_lat - 0.5, max_lat + 0.5)
-
-    # Formatting
-    ax.set_xlabel('Longitude', fontsize=14)
-    ax.set_ylabel('Latitude', fontsize=14)
-    ax.set_title(f'Sample Points Distribution - {grid_size_km}km Grid\n{len(points_gdf):,} total points',
-                 fontsize=16, pad=20)
-
-    # Create custom legend (fixes the warning)
-    from matplotlib.lines import Line2D
-    legend_elements = [
-        Line2D([0], [0], marker='s', color='w', markerfacecolor='lightgreen',
-               markersize=10, alpha=0.3, label='Forest Tiles'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='red',
-               markersize=5, alpha=0.7, label='Sample Points'),
-        Line2D([0], [0], color='blue', linestyle='--', linewidth=2, label='AOI Boundary')
-    ]
-    ax.legend(handles=legend_elements, loc='upper right', fontsize=12)
-
-    ax.grid(True, alpha=0.3)
-
-    # Add statistics text box
-    stats_text = f'Grid Size: {grid_size_km}km\nTotal Points: {len(points_gdf):,}\nUnique Grids: {points_gdf["grid_id"].nunique():,}'
-    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
-            verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-
-    plt.tight_layout()
-    plt.show()
-
-
+# Hello World
 def placeholder_analysis(tiles_gdf, config):
     print("☀️ Hello, World!")
     return True
