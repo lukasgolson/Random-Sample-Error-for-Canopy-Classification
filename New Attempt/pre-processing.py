@@ -6,22 +6,22 @@
 #region
 
 # Run through pre-processing with test settings (low complexity, fast run)
-USE_TEST_SETTINGS = True        # Set to True to run a test of the code using a larger BBOX and AOI
+USE_TEST_SETTINGS = False       # Set to True to run a test of the code using a larger BBOX and AOI
 
 # Explore the CHM tiles
 EXPLORE_S3_STRUCTURE = False    # Set to True to explore S3 bucket structure
 CHECK_CHM_FILE_SIZES = False    # Set to True to analyze CHM file sizes
-SHOW_TILES_PLOT = True         # Set to True to visualize the tiles
+SHOW_TILES_PLOT = False         # Set to True to visualize the tiles
 
 # Grid generation and mapping
 GENERATE_GRIDS = False          # Set to True to generate grids
 
 # Sample point generation and mapping
-GENERATE_SAMPLE_POINTS = True   # Set to True to generate systematic sample points
-SHOW_SAMPLE_POINTS_MAP = True   # Set to True to show a map of the generated sample points
+GENERATE_SAMPLE_POINTS = True  # Set to True to generate systematic sample points
+SHOW_SAMPLE_POINTS_MAP = False  # Set to True to show a map of the sample points (run only with test settings)
 
 # Download the CHMs and merge
-DOWNLOAD_CHM = False             # Set to True to downlaod the Meta CHM tiles, converted to binary
+DOWNLOAD_CHM = False            # Set to True to downlaod the Meta CHM tiles, converted to binary
 CREATE_CHM_MOSAIC = False       # Set to True to merge the Meta CHM tiles
 
 #endregion
