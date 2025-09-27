@@ -1,7 +1,7 @@
 # Files
 
 ## Folders
-### CONUS
+### AOI
 This folder includes two .py files and one datasets for processing across the contiguous United States, which we use are our area of interest. 
 
 **.py Files:**
