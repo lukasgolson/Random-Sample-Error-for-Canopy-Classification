@@ -8,8 +8,10 @@ This folder contains the scripts and datasets for generating grids over the cont
 ## Datasets:
 1. **conus.gpkg:** Geopackage of the contiguous United States AOI.
 2. **tiles_in_aoi.geojson:** AOI-filtered Meta CHM tiles used to define grid extent.
-3. **grid_1km.gpkg:** Generated grid cells with length and width of 1 km.
 4. **grid_20km.gpkg:** Generated grid cells with length and width of 20 km.
 5. **grid_40km.gpkg:** Generated grid cells with length and width of 40 km.
 6. **tiles_in_aoi.txt:** List of tile IDs contained within the AOI.
 7. **Tiles in AOI.pdf:** Map showing tiles and AOI boundaries.
+
+## Datasets to Create Locally:
+1. **grid_1km.gpkg:** Generated grid cells with length and width of 1 km. This file is 1.8 gb and takes approximately 10 minutes to create. It can be generated using grid_generator.py and will save to the AOI folder.
