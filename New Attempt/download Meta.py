@@ -6,9 +6,7 @@ import rasterio
 from botocore import UNSIGNED
 from botocore.config import Config
 import geopandas as gpd
-from shapely.geometry import box
 import matplotlib.pyplot as plt
-import subprocess
 import os
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -144,17 +142,16 @@ ax.ticklabel_format(style='scientific', axis='both', scilimits=(0, 0))
 plt.tight_layout()
 plt.show()
 
-# Optional: Print some efficiency stats
+# Print efficiency stats
 print(f"\nEfficiency summary:")
 print(f"- Used cached files: {Path(reprojected_file).exists()}")
 print(f"- Spatial index available: {hasattr(tiles_us_albers, 'sindex')}")
 print(f"- Total tiles: {len(tiles_us_albers)}")
 print(f"- Tiles in AOI: {len(tiles_in_aoi)}")
 
-
 # endregion
 
-## ------------------------------ FILE EXISTENCE CHECKING FUNCTIONS ------------------------------
+## ----------------------------------------------------- FUNCTIONS -----------------------------------------------------
 # region
 
 def check_s3_file_exists(s3_client, bucket, key):
@@ -291,11 +288,6 @@ def find_missing_files_alternatives(invalid_paths, bucket_name, base_prefix):
     return found_alternatives
 
 
-# endregion
-
-## ------------------------------ ENHANCED DOWNLOAD FUNCTIONS ------------------------------
-# region
-
 def download_tile_boto3(s3_client, bucket, key, local_path, max_retries=3):
     """
     Download a single tile using boto3 with pre-download existence check
@@ -364,14 +356,6 @@ def check_file_integrity(file_path, expected_size=None, min_size_mb=0.1):
         return False
 
 
-# endregion
-
-## ------------------------------ MAIN DOWNLOAD WORKFLOW WITH VALIDATION ------------------------------
-# region
-
-## ------------------------------ MAIN DOWNLOAD WORKFLOW WITH VALIDATION ------------------------------
-
-
 def create_binary_raster(input_path, output_path, threshold, nodata_value=None):
     """
     Converts a CHM raster to a binary raster based on a height threshold.
@@ -434,9 +418,7 @@ def conversion_worker(q, binary_dir, threshold):
                 logger.error(f"✗ Conversion failed for {raw_path.name}: {message}")
         finally:
             q.task_done()
-
-
-# region
+            
 
 def main_download_workflow(quadkeys, raw_dir="Meta CHM Raw", binary_dir="Meta CHM Binary"):
     """
@@ -559,10 +541,12 @@ def main_download_workflow(quadkeys, raw_dir="Meta CHM Raw", binary_dir="Meta CH
 
     if failed_downloads > 0:
         print(f"\n⚠ {failed_downloads} downloads failed. Check logs for details.")
+        
+        
+# endregion
 
+## ---------------------------------------------------- RUN SCRIPT -----------------------------------------------------
 # Run the enhanced download workflow
 if __name__ == "__main__":
     # Use the quadkeys identified from your AOI analysis
     main_download_workflow(qk)
-
-# endregion
