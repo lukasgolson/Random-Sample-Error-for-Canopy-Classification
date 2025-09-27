@@ -26,7 +26,11 @@ logger = logging.getLogger(__name__)
 Bucket = 'dataforgood-fb-data'
 Prefix = 'forests/v1/alsgedi_global_v6_float/chm/'
 
-s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
+s3_config = Config(
+    signature_version=UNSIGNED,
+    max_pool_connections=50
+)
+s3 = boto3.client('s3', config=s3_config)
 
 # Use delimiter='/' to get folder-like structure
 response = s3.list_objects_v2(Bucket=Bucket, Prefix=Prefix, Delimiter='/')
