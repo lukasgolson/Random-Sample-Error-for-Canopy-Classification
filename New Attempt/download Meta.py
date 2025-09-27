@@ -1,6 +1,8 @@
 # Enhanced Meta CHM downloader with robust file existence checking
 
 import boto3
+import numpy as np
+import rasterio
 from botocore import UNSIGNED
 from botocore.config import Config
 import geopandas as gpd
@@ -10,6 +12,7 @@ import subprocess
 import os
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import queue
 import time
 from tqdm import tqdm
 import logging
@@ -370,23 +373,83 @@ def check_file_integrity(file_path, expected_size=None, min_size_mb=0.1):
 # endregion
 
 ## ------------------------------ MAIN DOWNLOAD WORKFLOW WITH VALIDATION ------------------------------
+
+
+def create_binary_raster(input_path, output_path, threshold, nodata_value=None):
+    """
+    Converts a CHM raster to a binary raster based on a height threshold.
+    """
+    try:
+        with rasterio.open(input_path) as src:
+            data = src.read(1)
+            meta = src.meta.copy()
+            source_nodata = src.nodata
+
+            # Pixels > threshold become 1, all others become 0
+            binary_data = (data > threshold).astype(np.uint8)
+
+            # Preserve the original NoData values
+            if source_nodata is not None:
+                binary_data[data == source_nodata] = source_nodata
+
+            meta.update(dtype='uint8', count=1, compress='lzw')
+            if nodata_value is not None:
+                meta['nodata'] = nodata_value
+
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
+            with rasterio.open(output_path, 'w', **meta) as dst:
+                dst.write(binary_data, 1)
+
+        return True, f"Created binary raster: {Path(output_path).name}"
+    except Exception as e:
+        logger.error(f"Failed to create binary raster for {input_path}: {e}")
+        return False, str(e)
+
+
+def conversion_worker(q, binary_dir, threshold):
+    """
+    A worker that pulls a file path from a queue, converts it to a binary raster,
+    and deletes the original raw file upon success.
+    """
+    while True:
+        try:
+            raw_path_str = q.get()
+            if raw_path_str is None:  # Sentinel value to stop the worker
+                break
+
+            raw_path = Path(raw_path_str)
+            binary_output_path = Path(binary_dir) / raw_path.name
+
+            success, message = create_binary_raster(
+                input_path=str(raw_path),
+                output_path=str(binary_output_path),
+                threshold=threshold
+            )
+
+            if success:
+                try:
+                    os.remove(raw_path)
+                    logger.info(f"✓ Converted and removed raw file: {raw_path.name}")
+                except OSError as e:
+                    logger.error(f"Error removing raw file {raw_path}: {e}")
+            else:
+                logger.error(f"✗ Conversion failed for {raw_path.name}: {message}")
+        finally:
+            q.task_done()
+
+
 # region
 
-def main_download_workflow(quadkeys, download_dir="Meta CHM Tiles"):
+def main_download_workflow(quadkeys, raw_dir="Meta CHM Raw", binary_dir="Meta CHM Binary"):
     """
-    Main workflow that validates files before downloading
+    Main workflow that validates files in S3, then downloads and converts them in parallel.
+    Raw downloaded files are deleted after successful conversion.
     """
     bucket_name = 'dataforgood-fb-data'
     base_prefix = 'forests/v1/alsgedi_global_v6_float/chm/'
 
-    # Create download directory
-    Path(download_dir).mkdir(parents=True, exist_ok=True)
-
-    print(f"Starting download workflow for {len(quadkeys)} quadkeys")
-    print(f"Download directory: {Path(download_dir).absolute()}")
-    print("-" * 60)
-
-    # Step 1: Validate that files exist in S3
+    # --- Step 1: Validate that files exist in S3 ---
     print("Step 1: Validating file existence in S3...")
     valid_paths, invalid_paths, file_info = validate_quadkey_paths(
         quadkeys, bucket_name, base_prefix
@@ -395,116 +458,110 @@ def main_download_workflow(quadkeys, download_dir="Meta CHM Tiles"):
     print(f"✓ Found {len(valid_paths)} valid files")
     if invalid_paths:
         print(f"✗ {len(invalid_paths)} files not found at expected locations")
-
-        # Try to find alternatives for missing files
-        alternatives = find_missing_files_alternatives(invalid_paths, bucket_name, base_prefix)
-
-        if alternatives:
-            print(f"✓ Found alternatives for {len(alternatives)} missing files")
-            # Add alternatives to valid paths
-            for original_path, alt_info in alternatives.items():
-                valid_paths.append(alt_info['alternative_path'])
-                alt_key = alt_info['alternative_path'].replace(f"s3://{bucket_name}/", "")
-                file_info[alt_key] = {
-                    'size_mb': alt_info['size_mb'],
-                    'last_modified': alt_info['last_modified'],
-                    'quadkey': Path(alt_key).stem
-                }
-
-        remaining_missing = len(invalid_paths) - len(alternatives)
-        if remaining_missing > 0:
-            print(f"⚠ {remaining_missing} files could not be located in S3")
-            print("Missing files:")
-            for path in invalid_paths[:10]:  # Show first 10
-                if not any(path in alt for alt in alternatives.keys()):
-                    print(f"  - {path}")
-            if len(invalid_paths) > 10:
-                print(f"  ... and {len(invalid_paths) - 10} more")
+        # (Optional: Add logic here to find alternatives for missing files if needed)
 
     if not valid_paths:
         print("❌ No valid files found to download!")
         return
 
-    # Step 2: Check what's already downloaded locally
+    # --- Step 2: Check what's already downloaded locally ---
     print(f"\nStep 2: Checking local files...")
     files_to_download = []
-    already_downloaded = 0
+    already_converted = 0
 
+    # We check the FINAL destination (binary directory) to see if work is already done
     for s3_path in valid_paths:
         key = s3_path.replace(f"s3://{bucket_name}/", "")
         quadkey = file_info[key]['quadkey']
-        local_path = Path(download_dir) / f"{quadkey}.tif"
-        expected_size = int(file_info[key]['size_mb'] * 1024 * 1024)
 
-        if check_file_integrity(local_path, expected_size):
-            already_downloaded += 1
+        # Check if the FINAL binary file already exists and is valid
+        final_binary_path = Path(binary_dir) / f"{quadkey}.tif"
+        if final_binary_path.exists() and final_binary_path.stat().st_size > 1024:  # Basic integrity check
+            already_converted += 1
         else:
-            files_to_download.append((s3_path, key, local_path, expected_size))
+            files_to_download.append((s3_path, key))
 
-    print(f"✓ {already_downloaded} files already downloaded")
-    print(f"📥 {len(files_to_download)} files need downloading")
+    print(f"✓ {already_converted} files already converted and exist in '{binary_dir}'")
+    print(f"📥 {len(files_to_download)} files need downloading and conversion")
 
     if not files_to_download:
-        print("✅ All files are already downloaded!")
+        print("✅ All files are already processed!")
         return
 
-    # Step 3: Calculate total download size
-    total_size_mb = sum(info['size_mb'] for info in file_info.values()
-                        if any(info['quadkey'] in path for path, _, _, _ in files_to_download))
+    # --- Step 3: Calculate total download size ---
+    total_size_mb = sum(file_info[key]['size_mb'] for _, key in files_to_download)
 
     print(f"\nStep 3: Download summary")
     print(f"Total download size: {total_size_mb:.1f} MB ({total_size_mb / 1024:.1f} GB)")
     print("-" * 60)
 
-    # Step 4: Download files
-    print("Step 4: Downloading files...")
+    # --- Step 4: Setup directories and parallel processing ---
+    print("\nStep 4: Starting parallel download and conversion...")
+    Path(raw_dir).mkdir(parents=True, exist_ok=True)
+    Path(binary_dir).mkdir(parents=True, exist_ok=True)
+
+    conversion_queue = queue.Queue()
+    HEIGHT_THRESHOLD = 5  # meters
+
+    # Define number of parallel workers for each task
+    num_download_workers = 5
+    num_conversion_workers = max(1, os.cpu_count() - 1)  # Use most CPU cores for conversion
 
     successful_downloads = 0
     failed_downloads = 0
 
-    # Use ThreadPoolExecutor for parallel downloads
-    max_workers = min(5, len(files_to_download))  # Limit concurrent downloads
+    with ThreadPoolExecutor(max_workers=num_conversion_workers, thread_name_prefix='Converter') as conversion_executor, \
+            ThreadPoolExecutor(max_workers=num_download_workers, thread_name_prefix='Downloader') as download_executor:
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all download tasks
+        # 1. Start the conversion workers. They will wait for items in the queue.
+        for _ in range(num_conversion_workers):
+            conversion_executor.submit(conversion_worker, conversion_queue, binary_dir, HEIGHT_THRESHOLD)
+
+        # 2. Submit all download tasks
         future_to_file = {}
-        for s3_path, key, local_path, expected_size in files_to_download:
-            future = executor.submit(
-                download_tile_boto3,
-                s3, bucket_name, key, str(local_path)
+        for s3_path, key in files_to_download:
+            quadkey = Path(key).stem
+            local_path = Path(raw_dir) / f"{quadkey}.tif"
+            future = download_executor.submit(
+                download_tile_boto3, s3, bucket_name, key, str(local_path)
             )
-            future_to_file[future] = (s3_path, local_path)
+            future_to_file[future] = local_path
 
-        # Process completed downloads
-        with tqdm(total=len(files_to_download), desc="Downloading") as pbar:
+        # 3. Process downloads as they complete
+        with tqdm(total=len(files_to_download), desc="Downloading & Converting") as pbar:
             for future in as_completed(future_to_file):
-                s3_path, local_path = future_to_file[future]
+                local_path = future_to_file[future]
                 success, message = future.result()
 
                 if success:
                     successful_downloads += 1
+                    # Add the successfully downloaded file path to the queue for conversion
+                    conversion_queue.put(str(local_path))
                 else:
                     failed_downloads += 1
                     logger.error(f"Download failed: {message}")
 
-                pbar.set_postfix({
-                    'Success': successful_downloads,
-                    'Failed': failed_downloads
-                })
                 pbar.update(1)
 
-    # Step 5: Final summary
+        # 4. All downloads are done. Wait for the conversion queue to be empty.
+        print("\nAll downloads complete. Waiting for conversions to finish...")
+        conversion_queue.join()
+
+        # 5. Signal the conversion workers to stop by sending 'None'
+        for _ in range(num_conversion_workers):
+            conversion_queue.put(None)
+
+    # --- Step 5: Final summary ---
     print("\n" + "=" * 60)
-    print("DOWNLOAD COMPLETE")
+    print("WORKFLOW COMPLETE")
     print("=" * 60)
     print(f"✅ Successful downloads: {successful_downloads}")
     print(f"❌ Failed downloads: {failed_downloads}")
-    print(f"📁 Files saved to: {Path(download_dir).absolute()}")
+    print(f"📁 Binary rasters saved to: {Path(binary_dir).absolute()}")
+    print(f"🧹 Raw files directory '{Path(raw_dir).absolute()}' should now be empty.")
 
     if failed_downloads > 0:
         print(f"\n⚠ {failed_downloads} downloads failed. Check logs for details.")
-        print("You can re-run this script to retry failed downloads.")
-
 
 # Run the enhanced download workflow
 if __name__ == "__main__":
