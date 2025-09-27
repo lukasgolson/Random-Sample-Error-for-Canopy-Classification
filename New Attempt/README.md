@@ -2,13 +2,17 @@
 
 ## Folders
 ### AOI
-This folder includes two .py files and one datasets for processing across the contiguous United States, which we use are our area of interest. 
+This folder contains the scripts and datasets for generating grids over the contiguous United States (CONUS), which is our area of interest.
 
 **.py Files:**
-1. CONUS.py: Using a shapefile of the US states from TIGER (US Census Bureau), states outside the contiguous United States are removed (AK, HI, PR, GU, VI, MP, AS) and the remaining states are merged. This file exports conus.gpkg, a geopackage file that is used to access the Meta dataset.
-2. grid generator.py: Using conus.gpkg, this script generates a grid dataset across the contiguous United States with grid cell sizes of length and width 1, 10, and 40 km<sup>2<sup>.
+1. CONUS.py – Loads the US states shapefile from TIGER (US Census Bureau), removes states and territories outside the contiguous United States (AK, HI, PR, GU, VI, MP, AS), merges the remaining states, and exports conus.gpkg. This file provides the AOI polygon used for further processing.
+2. grid_generator.py – Uses conus.gpkg to generate square grid datasets across the contiguous United States with cell sizes of 1 km, 20 km, and 40 km. Each grid includes a unique cell_id and centroid coordinates in both projected (EPSG:5070) and geographic (EPSG:4326) coordinates. Only cells fully contained within the AOI are retained.
 
-**Dataset:**
-1. conus.gpkg: The geopackage file of the contigous United States.
+**Datasets:**
+1. conus.gpkg – Geopackage of the contiguous United States AOI.
+2. tiles_in_aoi.geojson – AOI-filtered Meta CHM tiles used to define grid extent.
+3. grid_1km.gpkg, grid_20km.gpkg, grid_40km.gpkg – Generated grid files for each cell size.
+4. tiles_in_aoi.txt – List of tile IDs contained within the AOI.
+5. Tiles in AOI.pdf – Map showing tiles and AOI boundaries.
 
 ## Scripts
