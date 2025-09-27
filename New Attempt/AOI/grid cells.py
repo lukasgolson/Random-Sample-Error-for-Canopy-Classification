@@ -112,7 +112,7 @@ for cell_size_km in grid_sizes:
             geometry=cells,
             crs="EPSG:5070"
         )
-        
+
         # Save as GeoPackage
         filename = f"grid_{cell_size_km}km.gpkg"
         grid_gdf.to_file(filename, driver="GPKG")
