@@ -5,7 +5,7 @@ from shapely.ops import unary_union
 import matplotlib.pyplot as plt
 
 # Load TIGER states shapefile
-states = gpd.read_file("AOI/tl_2025_us_state/tl_2025_us_state.shp")
+states = gpd.read_file("tl_2025_us_state/tl_2025_us_state.shp")
 
 # Filter contiguous US (exclude Alaska, Hawaii, territories)
 conus = states[~states['STUSPS'].isin(['AK', 'HI', 'PR', 'GU', 'VI', 'MP', 'AS'])]
@@ -13,8 +13,11 @@ conus = states[~states['STUSPS'].isin(['AK', 'HI', 'PR', 'GU', 'VI', 'MP', 'AS']
 # Merge all states into a single polygon
 conus = gpd.GeoDataFrame(geometry=[unary_union(conus.geometry)], crs=conus.crs)
 
+# Reproject to Albers Equal Area (meters)
+conus = conus.to_crs(epsg=5070)
+
 # Save merged polygon to GeoPackage
-conus.to_file("AOI/conus.gpkg", layer="conus", driver="GPKG")
+conus.to_file("conus.gpkg", layer="conus", driver="GPKG")
 
 # Load the GeoPackage
 conus_gpkg = gpd.read_file("conus.gpkg", layer="conus")
