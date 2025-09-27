@@ -163,7 +163,7 @@ Path(download_dir).mkdir(exist_ok=True)
 
 baseurl = "s3://dataforgood-fb-data/forests/v1/alsgedi_global_v6_float/chm"
 
-print(f"Fast downloading {len(qk)} tiles...")
+print(f"\n\nFast downloading {len(qk)} tiles...")
 start_time = time.time()
 
 
@@ -243,9 +243,29 @@ print(f"  Successful: {successful}")
 print(f"  Failed: {failed}")
 print(f"  Speed: {successful / elapsed:.1f} files/second")
 
+# Clean up any remaining temp files
+print("Cleaning up temp files...")
+import glob
+
+temp_files = glob.glob(f"{download_dir}/*.tif.*")
+for temp_file in temp_files:
+    try:
+        os.remove(temp_file)
+        print(f"Removed temp file: {Path(temp_file).name}")
+    except:
+        pass
+
 # Show what we downloaded
 downloaded_files = list(Path(download_dir).glob("*.tif"))
-print(f"\n{len(downloaded_files)} files in {download_dir}/")
+print(f"\n{len(downloaded_files)} clean .tif files in {download_dir}/")
 print(f"Total size: {sum(f.stat().st_size for f in downloaded_files) / 1024 ** 2:.1f} MB")
+
+# Show first few filenames to verify correct naming
+if downloaded_files:
+    print("Sample filenames:")
+    for f in sorted(downloaded_files)[:5]:
+        print(f"  {f.name}")
+    if len(downloaded_files) > 5:
+        print(f"  ... and {len(downloaded_files) - 5} more")
 
 #endregion
