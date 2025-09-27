@@ -27,12 +27,7 @@ logger = logging.getLogger(__name__)
 Bucket = 'dataforgood-fb-data'
 Prefix = 'forests/v1/alsgedi_global_v6_float/'
 
-s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
-s3_config = Config(
-    signature_version=UNSIGNED,
-    max_pool_connections=50
-)
-s3 = boto3.client('s3', config=s3_config)
+s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED, max_pool_connections=50))
 
 # Use delimiter='/' to get folder-like structure
 response = s3.list_objects_v2(Bucket=Bucket, Prefix=Prefix, Delimiter='/')
@@ -121,23 +116,23 @@ print(f"Number of tiles in AOI: {len(tiles_in_aoi)}")
 qk = tiles_in_aoi['tile'].tolist()
 qk = [tile for tile in qk if tile]
 
-# More efficient plotting
 fig, ax = plt.subplots(figsize=(10, 8))
 
-# Plot tiles - use plot() instead of boundary.plot() if you want filled polygons
-tiles_in_aoi.boundary.plot(ax=ax, color='blue', linewidth=1, label=f'Tiles ({len(tiles_in_aoi)})')
+# Plot tiles as green lines
+tiles_in_aoi.boundary.plot(ax=ax, color='green', linewidth=1, label=f'Tiles ({len(tiles_in_aoi)})')
 
+# Plot AOI outline in black
 aoi_plot_gdf = gpd.GeoDataFrame([1], geometry=[aoi_geom_albers])
-aoi_plot_gdf.boundary.plot(ax=ax, color='red', linewidth=2, label='AOI')
+aoi_plot_gdf.boundary.plot(ax=ax, color='black', linewidth=2, label='Contiguous United States')
 
-ax.set_xlabel("Easting (meters)")
-ax.set_ylabel("Northing (meters)")
-ax.set_title("Meta CHM Tiles Intersecting AOI")
-ax.legend()
-ax.grid(True, alpha=0.3)
+ax.set_xticks([]) # Remove ticks
+ax.set_yticks([]) # Remove ticks
+ax.set_title("") # Remove title
+ax.set_xlabel("") # Remove axis labels
+ax.set_ylabel("") # Remove axis labels
+ax.grid(False)
 
-# Format large coordinates
-ax.ticklabel_format(style='scientific', axis='both', scilimits=(0, 0))
+ax.legend(loc='lower left', frameon=False, fontsize=17) # Move legend to bottom left and remove box
 
 plt.tight_layout()
 plt.show()
@@ -149,6 +144,7 @@ print(f"- Spatial index available: {hasattr(tiles_us_albers, 'sindex')}")
 print(f"- Total tiles: {len(tiles_us_albers)}")
 print(f"- Tiles in AOI: {len(tiles_in_aoi)}")
 
+exit()
 # endregion
 
 ## ----------------------------------------------------- FUNCTIONS -----------------------------------------------------
@@ -418,7 +414,7 @@ def conversion_worker(q, binary_dir, threshold):
                 logger.error(f"✗ Conversion failed for {raw_path.name}: {message}")
         finally:
             q.task_done()
-            
+
 
 def main_download_workflow(quadkeys, raw_dir="Meta CHM Raw", binary_dir="Meta CHM Binary"):
     """
@@ -541,8 +537,8 @@ def main_download_workflow(quadkeys, raw_dir="Meta CHM Raw", binary_dir="Meta CH
 
     if failed_downloads > 0:
         print(f"\n⚠ {failed_downloads} downloads failed. Check logs for details.")
-        
-        
+
+
 # endregion
 
 ## ---------------------------------------------------- RUN SCRIPT -----------------------------------------------------
