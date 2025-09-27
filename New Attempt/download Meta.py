@@ -5,8 +5,6 @@ import numpy as np
 import rasterio
 from botocore import UNSIGNED
 from botocore.config import Config
-import geopandas as gpd
-import matplotlib.pyplot as plt
 import os
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -15,136 +13,34 @@ import time
 from tqdm import tqdm
 import logging
 
-USE_TEST_SETTINGS = False  # Test this code using a low complexity, fast run by setting this value to True
+USE_TEST_SETTINGS = True  # Test this code using a low complexity, fast run by setting this value to True
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-## ------------------------------ EXPLORE THE S3 BUCKET STRUCTURE ------------------------------
-# region
-
 Bucket = 'dataforgood-fb-data'
-Prefix = 'forests/v1/alsgedi_global_v6_float/'
+Prefix = 'forests/v1/alsgedi_global_v6_float/chm/'
 
 s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED, max_pool_connections=50))
 
 # Use delimiter='/' to get folder-like structure
 response = s3.list_objects_v2(Bucket=Bucket, Prefix=Prefix, Delimiter='/')
 
-print(f"Directories in s3://{Bucket}/{Prefix}")
-print("-" * 60)
-
-# Show subdirectories
-if 'CommonPrefixes' in response:
-    for prefix_info in response['CommonPrefixes']:
-        folder_name = prefix_info['Prefix']
-        print(f"📁 {folder_name}")
-
-# Show files in current directory (not in subdirectories)
-if 'Contents' in response:
-    for obj in response['Contents']:
-        # Skip the prefix itself if it's a directory marker
-        if obj['Key'] != '':
-            size = obj['Size']
-            key = obj['Key']
-            modified = obj['LastModified'].strftime('%Y-%m-%d %H:%M:%S')
-            print(f"📄 {modified} {size:>12} {key}")
-
-if 'CommonPrefixes' not in response and 'Contents' not in response:
-    print("No directories or files found")
-
-print("-" * 60)
-print("\n")
-# endregion
-
 ## ------------------------------ IDENTIFY META CHM TILES IN AOI ------------------------------
 # region
 
 # Identify which AOI to use
 if USE_TEST_SETTINGS is False:
-    # Full CONUS polygon (non-square)
-    conus_gpkg = gpd.read_file("CONUS/conus.gpkg", layer="conus")  # your shapefile
-    aoi_gdf = conus_gpkg.to_crs(epsg=5070)  # reproject to Albers
-    # Merge all features into a single polygon if needed
-    aoi_geom_albers = aoi_gdf.geometry.union_all()
+    with open('AOI/tiles_in_aoi.txt', "r") as f:
+        aoi = [line.strip() for line in f]
 
 else:
-    # Small test polygon (can be arbitrary shape)
-    test_coords = [(-80, 40), (-82, 42), (-75, 44), (-70, 41)]  # example polygon
-    aoi_gdf = gpd.GeoDataFrame([1], geometry=[gpd.Polygon(test_coords)], crs="EPSG:4326")
-    aoi_gdf = aoi_gdf.to_crs(epsg=5070)
-    aoi_geom_albers = aoi_gdf.geometry[0]
+    with open('AOI/tiles_in_aoi_test.txt', "r") as f:
+        aoi = [line.strip() for line in f]
 
-# File paths
-bucket_name = 'dataforgood-fb-data'
-key = 'forests/v1/alsgedi_global_v6_float/tiles.geojson'
-local_file = 'tiles.geojson'
-reprojected_file = 'tiles_us_albers.geojson'
+print(f"Total number of tiles: {len(aoi)}")
 
-# Check if reprojected file already exists to avoid redundant work
-if Path(reprojected_file).exists():
-    print(f"Loading existing reprojected tiles from {reprojected_file}")
-    tiles_us_albers = gpd.read_file(reprojected_file)
-else:
-    # Check if original file exists
-    if not Path(local_file).exists():
-        print(f"Downloading {local_file} from S3...")
-        s3.download_file(bucket_name, key, local_file)
-        print(f"Downloaded {local_file}")
-    else:
-        print(f"Using existing {local_file}")
-
-    # Load, reproject, and save in one efficient chain
-    print("Reprojecting tiles to US Albers...")
-    tiles_us_albers = (gpd.read_file(local_file)
-                       .to_crs(epsg=5070))
-
-    # Save reprojected version for future use
-    tiles_us_albers.to_file(reprojected_file, driver="GeoJSON")
-    print(f"Saved reprojected tiles to {reprojected_file}")
-
-print(f"Loaded {len(tiles_us_albers)} tiles")
-
-possible_matches_index = list(tiles_us_albers.sindex.intersection(aoi_geom_albers.bounds))
-possible_matches = tiles_us_albers.iloc[possible_matches_index]
-tiles_in_aoi = possible_matches[possible_matches.within(aoi_geom_albers)]
-
-print(f"Number of tiles in AOI: {len(tiles_in_aoi)}")
-
-# Save list of QuadKeys from tiles.geojson
-qk = tiles_in_aoi['tile'].tolist()
-qk = [tile for tile in qk if tile]
-
-fig, ax = plt.subplots(figsize=(10, 8))
-
-# Plot tiles as green lines
-tiles_in_aoi.boundary.plot(ax=ax, color='green', linewidth=1, label=f'Tiles ({len(tiles_in_aoi)})')
-
-# Plot AOI outline in black
-aoi_plot_gdf = gpd.GeoDataFrame([1], geometry=[aoi_geom_albers])
-aoi_plot_gdf.boundary.plot(ax=ax, color='black', linewidth=2, label='Contiguous United States')
-
-ax.set_xticks([]) # Remove ticks
-ax.set_yticks([]) # Remove ticks
-ax.set_title("") # Remove title
-ax.set_xlabel("") # Remove axis labels
-ax.set_ylabel("") # Remove axis labels
-ax.grid(False)
-
-ax.legend(loc='lower left', frameon=False, fontsize=17) # Move legend to bottom left and remove box
-
-plt.tight_layout()
-plt.show()
-
-# Print efficiency stats
-print(f"\nEfficiency summary:")
-print(f"- Used cached files: {Path(reprojected_file).exists()}")
-print(f"- Spatial index available: {hasattr(tiles_us_albers, 'sindex')}")
-print(f"- Total tiles: {len(tiles_us_albers)}")
-print(f"- Tiles in AOI: {len(tiles_in_aoi)}")
-
-exit()
 # endregion
 
 ## ----------------------------------------------------- FUNCTIONS -----------------------------------------------------
@@ -352,43 +248,37 @@ def check_file_integrity(file_path, expected_size=None, min_size_mb=0.1):
         return False
 
 
-def create_binary_raster(input_path, output_path, threshold):
+def create_binary_raster(input_path, output_path, threshold, nodata_value=None):
     """
-    Converts a CHM raster to a highly compressed 1-bit binary raster,
-    processing the file in chunks to handle very large files with low memory.
+    Converts a CHM raster to a binary raster based on a height threshold.
     """
     try:
         with rasterio.open(input_path) as src:
-            # Copy metadata and update for a 1-bit output
+            data = src.read(1)
             meta = src.meta.copy()
-            meta.update(
-                dtype='uint8',
-                count=1,
-                compress='CCITTFAX4'
-            )
+            source_nodata = src.nodata
 
-            # Create the destination file and open it for writing
-            with rasterio.open(output_path, 'w', **meta, NBITS=1) as dst:
-                # Iterate over the source raster in chunks (windows)
-                for ji, window in src.block_windows(1):
-                    # Read one chunk of data
-                    data_chunk = src.read(1, window=window)
+            # Pixels > threshold become 1, all others become 0
+            binary_data = (data > threshold).astype(np.uint8)
 
-                    # Process the chunk
-                    binary_chunk = np.uint8(data_chunk > threshold)
+            # Preserve the original NoData values
+            if source_nodata is not None:
+                binary_data[data == source_nodata] = source_nodata
 
-                    if src.nodata is not None:
-                        binary_chunk[data_chunk == src.nodata] = src.nodata
+            meta.update(dtype='uint8', count=1, compress='lzw')
+            if nodata_value is not None:
+                meta['nodata'] = nodata_value
 
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-                    dst.write(binary_chunk, 1, window=window)
+            with rasterio.open(output_path, 'w', **meta) as dst:
+                dst.write(binary_data, 1)
 
-
-        return True, f"Created 1-bit raster: {Path(output_path).name}"
-
+        return True, f"Created binary raster: {Path(output_path).name}"
     except Exception as e:
-        logger.error(f"Failed to create 1-bit raster for {input_path}: {e}")
+        logger.error(f"Failed to create binary raster for {input_path}: {e}")
         return False, str(e)
+
 
 def conversion_worker(q, binary_dir, threshold):
     """
@@ -474,7 +364,6 @@ def main_download_workflow(quadkeys, raw_dir="Meta CHM Raw", binary_dir="Meta CH
 
     print(f"\nStep 3: Download summary")
     print(f"Total download size: {total_size_mb:.1f} MB ({total_size_mb / 1024:.1f} GB)")
-    print("-" * 60)
 
     # --- Step 4: Setup directories and parallel processing ---
     print("\nStep 4: Starting parallel download and conversion...")
@@ -544,11 +433,10 @@ def main_download_workflow(quadkeys, raw_dir="Meta CHM Raw", binary_dir="Meta CH
     if failed_downloads > 0:
         print(f"\n⚠ {failed_downloads} downloads failed. Check logs for details.")
 
-
 # endregion
 
 ## ---------------------------------------------------- RUN SCRIPT -----------------------------------------------------
 # Run the enhanced download workflow
 if __name__ == "__main__":
-    # Use the quadkeys identified from your AOI analysis
-    main_download_workflow(qk)
+    # Use the quadkeys identified from the AOI analysis
+    main_download_workflow(aoi)
