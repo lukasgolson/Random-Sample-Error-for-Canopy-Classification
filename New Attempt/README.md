@@ -9,6 +9,6 @@ This folder includes two .py files and one datasets for processing across the co
 2. grid generator.py: Using conus.gpkg, this script generates a grid dataset across the contiguous United States with grid cell sizes of length and width 1, 10, and 40 km<sup>2<sup>.
 
 **Dataset:**
-1. conus.gpkg: The geopackage file of the contigous United States. When used, this should be in the same location as your .py files.
+1. conus.gpkg: The geopackage file of the contigous United States.
 
 ## Scripts
