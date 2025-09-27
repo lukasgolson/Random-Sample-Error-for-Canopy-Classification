@@ -1,1 +1,4 @@
 CONUS: The geopackage file of the contigous United States. The python file (CONUS.py) generates the file, CONUS.gpkg.
+
+Files:
+download Meta.py: downloads the Meta CHM for the expressed area of interest (in this case, the contiguous United States). The files are converted from unsigned 8-bit integers into 1-bit (canopy (1) or not (0))
