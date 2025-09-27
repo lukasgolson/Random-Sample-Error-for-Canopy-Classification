@@ -17,7 +17,7 @@ import time
 from tqdm import tqdm
 import logging
 
-USE_TEST_SETTINGS = True  # Test this code using a low complexity, fast run by setting this value to True
+USE_TEST_SETTINGS = False  # Test this code using a low complexity, fast run by setting this value to True
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -27,8 +27,9 @@ logger = logging.getLogger(__name__)
 # region
 
 Bucket = 'dataforgood-fb-data'
-Prefix = 'forests/v1/alsgedi_global_v6_float/chm/'
+Prefix = 'forests/v1/alsgedi_global_v6_float/'
 
+s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
 s3_config = Config(
     signature_version=UNSIGNED,
     max_pool_connections=50
@@ -69,9 +70,18 @@ print("\n")
 
 # Identify which AOI to use
 if USE_TEST_SETTINGS is False:
-    AOI = [-127, 24, -66.9, 49]  # Bounding box: [min_lon, min_lat, max_lon, max_lat]
+    # Full CONUS polygon (non-square)
+    conus_gpkg = gpd.read_file("conus.gpkg", layer="conus")  # your shapefile
+    aoi_gdf = conus_gpkg.to_crs(epsg=5070)  # reproject to Albers
+    # Merge all features into a single polygon if needed
+    aoi_geom_albers = aoi_gdf.geometry.union_all()
+
 else:
-    AOI = [-80, 40, -70, 45]  # Small NY/New England region
+    # Small test polygon (can be arbitrary shape)
+    test_coords = [(-80, 40), (-82, 42), (-75, 44), (-70, 41)]  # example polygon
+    aoi_gdf = gpd.GeoDataFrame([1], geometry=[gpd.Polygon(test_coords)], crs="EPSG:4326")
+    aoi_gdf = aoi_gdf.to_crs(epsg=5070)
+    aoi_geom_albers = aoi_gdf.geometry[0]
 
 # File paths
 bucket_name = 'dataforgood-fb-data'
@@ -103,30 +113,15 @@ else:
 
 print(f"Loaded {len(tiles_us_albers)} tiles")
 
-# Create AOI geometry directly in target CRS (more efficient)
-# Convert AOI bounds to target CRS once
-aoi_wgs84 = box(*AOI)
-aoi_gdf = gpd.GeoDataFrame([1], geometry=[aoi_wgs84], crs="EPSG:4326")
-aoi_geom_albers = aoi_gdf.to_crs(epsg=5070).geometry[0]
-
-# Use spatial index for faster intersection
-print("Finding tiles that intersect AOI...")
-if hasattr(tiles_us_albers, 'sindex'):
-    # Use spatial index for preliminary filtering
-    possible_matches_index = list(tiles_us_albers.sindex.intersection(aoi_geom_albers.bounds))
-    possible_matches = tiles_us_albers.iloc[possible_matches_index]
-    # Then do precise intersection on smaller subset
-    tiles_in_aoi = possible_matches[possible_matches.intersects(aoi_geom_albers)]
-else:
-    # Fallback to regular intersection if no spatial index
-    tiles_in_aoi = tiles_us_albers[tiles_us_albers.intersects(aoi_geom_albers)]
+possible_matches_index = list(tiles_us_albers.sindex.intersection(aoi_geom_albers.bounds))
+possible_matches = tiles_us_albers.iloc[possible_matches_index]
+tiles_in_aoi = possible_matches[possible_matches.within(aoi_geom_albers)]
 
 print(f"Number of tiles in AOI: {len(tiles_in_aoi)}")
 
 # Save list of QuadKeys from tiles.geojson
 qk = tiles_in_aoi['tile'].tolist()
 qk = [tile for tile in qk if tile]
-print(f"QuadKeys: {qk}")
 
 # More efficient plotting
 fig, ax = plt.subplots(figsize=(10, 8))
@@ -134,7 +129,6 @@ fig, ax = plt.subplots(figsize=(10, 8))
 # Plot tiles - use plot() instead of boundary.plot() if you want filled polygons
 tiles_in_aoi.boundary.plot(ax=ax, color='blue', linewidth=1, label=f'Tiles ({len(tiles_in_aoi)})')
 
-# Create AOI geodataframe for plotting (more efficient than GeoSeries)
 aoi_plot_gdf = gpd.GeoDataFrame([1], geometry=[aoi_geom_albers])
 aoi_plot_gdf.boundary.plot(ax=ax, color='red', linewidth=2, label='AOI')
 
@@ -371,6 +365,9 @@ def check_file_integrity(file_path, expected_size=None, min_size_mb=0.1):
 
 
 # endregion
+
+## ------------------------------ MAIN DOWNLOAD WORKFLOW WITH VALIDATION ------------------------------
+# region
 
 ## ------------------------------ MAIN DOWNLOAD WORKFLOW WITH VALIDATION ------------------------------
 
