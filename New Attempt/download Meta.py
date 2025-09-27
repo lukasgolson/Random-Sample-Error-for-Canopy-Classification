@@ -64,7 +64,7 @@ print("\n")
 # Identify which AOI to use
 if USE_TEST_SETTINGS is False:
     # Full CONUS polygon (non-square)
-    conus_gpkg = gpd.read_file("conus.gpkg", layer="conus")  # your shapefile
+    conus_gpkg = gpd.read_file("CONUS/conus.gpkg", layer="conus")  # your shapefile
     aoi_gdf = conus_gpkg.to_crs(epsg=5070)  # reproject to Albers
     # Merge all features into a single polygon if needed
     aoi_geom_albers = aoi_gdf.geometry.union_all()
