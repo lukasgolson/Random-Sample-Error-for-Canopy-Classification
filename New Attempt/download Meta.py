@@ -352,37 +352,43 @@ def check_file_integrity(file_path, expected_size=None, min_size_mb=0.1):
         return False
 
 
-def create_binary_raster(input_path, output_path, threshold, nodata_value=None):
+def create_binary_raster(input_path, output_path, threshold):
     """
-    Converts a CHM raster to a binary raster based on a height threshold.
+    Converts a CHM raster to a highly compressed 1-bit binary raster,
+    processing the file in chunks to handle very large files with low memory.
     """
     try:
         with rasterio.open(input_path) as src:
-            data = src.read(1)
+            # Copy metadata and update for a 1-bit output
             meta = src.meta.copy()
-            source_nodata = src.nodata
+            meta.update(
+                dtype='uint8',
+                count=1,
+                compress='CCITTFAX4'
+            )
 
-            # Pixels > threshold become 1, all others become 0
-            binary_data = (data > threshold).astype(np.uint8)
+            # Create the destination file and open it for writing
+            with rasterio.open(output_path, 'w', **meta, NBITS=1) as dst:
+                # Iterate over the source raster in chunks (windows)
+                for ji, window in src.block_windows(1):
+                    # Read one chunk of data
+                    data_chunk = src.read(1, window=window)
 
-            # Preserve the original NoData values
-            if source_nodata is not None:
-                binary_data[data == source_nodata] = source_nodata
+                    # Process the chunk
+                    binary_chunk = np.uint8(data_chunk > threshold)
 
-            meta.update(dtype='uint8', count=1, compress='lzw')
-            if nodata_value is not None:
-                meta['nodata'] = nodata_value
+                    if src.nodata is not None:
+                        binary_chunk[data_chunk == src.nodata] = src.nodata
 
-            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-            with rasterio.open(output_path, 'w', **meta) as dst:
-                dst.write(binary_data, 1)
+                    dst.write(binary_chunk, 1, window=window)
 
-        return True, f"Created binary raster: {Path(output_path).name}"
+
+        return True, f"Created 1-bit raster: {Path(output_path).name}"
+
     except Exception as e:
-        logger.error(f"Failed to create binary raster for {input_path}: {e}")
+        logger.error(f"Failed to create 1-bit raster for {input_path}: {e}")
         return False, str(e)
-
 
 def conversion_worker(q, binary_dir, threshold):
     """

@@ -17,7 +17,7 @@ conus = gpd.GeoDataFrame(geometry=[unary_union(conus.geometry)], crs=conus.crs)
 conus.to_file("conus.gpkg", layer="conus", driver="GPKG")
 
 # Load the GeoPackage
-conus_gpkg = gpd.read_file("conus.gpkg", layer="conus")
+conus_gpkg = gpd.read_file("../conus.gpkg", layer="conus")
 
 # Plot
 fig, ax = plt.subplots(figsize=(12, 8))
