@@ -46,7 +46,7 @@ def main_download_workflow(quadkeys, raw_dir="Meta CHM Raw", binary_dir="Meta CH
     # --- Step 1: Validate that files exist in S3 ---
     print("Step 1: Validating file existence in S3...")
     valid_paths, invalid_paths, file_info = validate_quadkey_paths(
-        quadkeys, bucket_name, base_prefix
+        quadkeys, bucket_name, base_prefix, s3
     )
 
     print(f"✓ Found {len(valid_paths)} valid files")
