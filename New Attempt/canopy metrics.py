@@ -1,7 +1,8 @@
 import geopandas as gpd
 import os
-
 from functions import process_grid_cells_with_raster_association
+
+# ATTENTION: This works best if you pip install rtree and import into functions.py
 
 USE_TEST_SETTINGS = True
 
@@ -22,16 +23,34 @@ if __name__ == "__main__":
     # Create output directory if it doesn't exist
     os.makedirs(output_directory, exist_ok=True)
 
+    # Choose which grids to process
+    grid_paths = (
+        ["AOI/grid_100km.gpkg"] if USE_TEST_SETTINGS
+        else ["AOI/grid_1km.gpkg", "AOI/grid_20km.gpkg", "AOI/grid_40km.gpkg"]
+    )
+
     # Process each grid size
-    for grid in grids:
-        # Determine AOI size from grid
-        if 'grid_1km' in str(grid):
+    for grid_path in grid_paths:
+        grid = gpd.read_file(grid_path)
+
+        # Skip if grid has no cells
+        if grid.empty:
+            print(f"⚠️ Skipping {grid_path}: no cells found.")
+            continue
+
+        # Ensure cell_id exists
+        if "cell_id" not in grid.columns:
+            grid = grid.reset_index(drop=True)
+            grid["cell_id"] = grid.index
+
+        # Determine AOI size
+        if "1km" in grid_path:
             aoi_size = "1km"
-        elif 'grid_20km' in str(grid):
+        elif "20km" in grid_path:
             aoi_size = "20km"
-        elif 'grid_40km' in str(grid):
+        elif "40km" in grid_path:
             aoi_size = "40km"
-        elif 'grid_100km' in str(grid):
+        elif "100km" in grid_path:
             aoi_size = "100km"
         else:
             aoi_size = "unknown"
