@@ -26,7 +26,7 @@ if __name__ == "__main__":
     # Choose which grids to process
     grid_paths = (
         ["AOI/grid_100km.gpkg"] if USE_TEST_SETTINGS
-        else ["AOI/grid_1km.gpkg", "AOI/grid_20km.gpkg", "AOI/grid_40km.gpkg"]
+        else ["AOI/grid_3km.gpkg", "AOI/grid_24km.gpkg", "AOI/grid_54km.gpkg"]
     )
 
     # Process each grid size
@@ -45,11 +45,11 @@ if __name__ == "__main__":
 
         # Determine AOI size
         if "3km" in grid_path:
-            aoi_size = "1km"
+            aoi_size = "3km"
         elif "24km" in grid_path:
-            aoi_size = "20km"
+            aoi_size = "24km"
         elif "54km" in grid_path:
-            aoi_size = "40km"
+            aoi_size = "54km"
         elif "100km" in grid_path:
             aoi_size = "100km"
         else:
