@@ -7,12 +7,12 @@ from functions import process_grid_cells_with_raster_association
 USE_TEST_SETTINGS = True
 
 # Import the grids
-grid_1 = gpd.read_file('AOI/grid_1km.gpkg')
-grid_20 = gpd.read_file('AOI/grid_20km.gpkg')
-grid_40 = gpd.read_file('AOI/grid_40km.gpkg')
+grid_3 = gpd.read_file('AOI/grid_3km.gpkg')
+grid_24 = gpd.read_file('AOI/grid_24km.gpkg')
+grid_54 = gpd.read_file('AOI/grid_54km.gpkg')
 grid_100 = gpd.read_file('AOI/grid_100km.gpkg')
 
-grids = [grid_100] if USE_TEST_SETTINGS else [grid_1, grid_20, grid_40]
+grids = [grid_100] if USE_TEST_SETTINGS else [grid_3, grid_24, grid_54]
 
 # Main execution
 if __name__ == "__main__":
@@ -44,11 +44,11 @@ if __name__ == "__main__":
             grid["cell_id"] = grid.index
 
         # Determine AOI size
-        if "1km" in grid_path:
+        if "3km" in grid_path:
             aoi_size = "1km"
-        elif "20km" in grid_path:
+        elif "24km" in grid_path:
             aoi_size = "20km"
-        elif "40km" in grid_path:
+        elif "54km" in grid_path:
             aoi_size = "40km"
         elif "100km" in grid_path:
             aoi_size = "100km"
