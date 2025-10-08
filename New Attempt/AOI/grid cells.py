@@ -82,7 +82,7 @@ tiles_in_aoi = gpd.read_file("tiles_in_aoi.geojson").to_crs(epsg=5070)
 
 # Merge all polygons to one big AOI polygon
 aoi_union = tiles_in_aoi.union_all()
-grid_sizes = [1, 20, 40] # Grid sizes in km
+grid_sizes = [3, 24, 54] # Grid sizes in km
 
 for cell_size_km in grid_sizes:
     cell_size_m = cell_size_km * 1000
