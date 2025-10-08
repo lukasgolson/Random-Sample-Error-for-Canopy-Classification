@@ -1,5 +1,7 @@
 # Enhanced Meta CHM downloader with robust file existence checking
 
+import os
+
 import logging
 import boto3
 from botocore import UNSIGNED
@@ -7,7 +9,7 @@ from botocore.config import Config
 
 from functions import main_download_workflow
 
-USE_TEST_SETTINGS = True  # Test this code using a low complexity, fast run by setting this value to True
+USE_TEST_SETTINGS = False  # Test this code using a low complexity, fast run by setting this value to True
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -20,6 +22,9 @@ s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED, max_pool_conne
 
 # Use delimiter='/' to get folder-like structure
 response = s3.list_objects_v2(Bucket=Bucket, Prefix=Prefix, Delimiter='/')
+
+
+os.chdir("I:\Martin & Olson 2025")
 
 ## ------------------------------ IDENTIFY META CHM TILES IN AOI ------------------------------
 # region
